@@ -218,4 +218,4 @@ def test_cross_origin_post_rejected(admin):
 def test_subscribers_page(admin):
     html = admin.get("/subscribers").text
     assert "@alice" in html and "бот работает" in html
-    assert "≥ 4" in html
+    assert "Правила рассылки" in html and "выключена" in html

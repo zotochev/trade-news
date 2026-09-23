@@ -24,14 +24,17 @@ from trade_news.db.schema import (
     item_relevance,
     items,
     llm_calls,
-    raw_items,
     subscribers,
 )
 from trade_news.llm.usage import quota_day_start
 from trade_news.status import source_statuses
-
-SUMMARY = annotations.c.payload_json["summary"].as_string()
-EVENT_TYPE = annotations.c.payload_json["event_type"].as_string()
+from trade_news.views import (
+    EVENT_TYPE,
+    SUMMARY,
+    current_annotation,
+    links_by_item,
+    relevance_by_item,
+)
 
 
 def _count(conn, table, *where) -> int:
@@ -39,37 +42,7 @@ def _count(conn, table, *where) -> int:
 
 
 def _annotated():
-    return annotations.c.prompt_version == PROMPT_VERSION
-
-
-# --- shared: links and relevance per item ----------------------------------------
-
-
-def links_by_item(conn, item_ids: list[int]) -> dict[int, list[dict]]:
-    if not item_ids:
-        return {}
-    rows = conn.execute(
-        sa.select(item_assets, assets.c.symbol)
-        .outerjoin(assets, assets.c.id == item_assets.c.asset_id)
-        .where(item_assets.c.item_id.in_(item_ids))
-        .order_by(item_assets.c.is_primary.desc(), item_assets.c.importance.desc())
-    ).mappings()
-    out: dict[int, list[dict]] = defaultdict(list)
-    for r in rows:
-        label = r["symbol"] or (
-            f"?{r['raw_symbol']}" if r["raw_symbol"] else (r["group_label"] or r["asset_class"])
-        )
-        out[r["item_id"]].append(
-            dict(r) | {"label": label, "unresolved": bool(r["raw_symbol"]) and not r["symbol"]}
-        )
-    return out
-
-
-def relevance_by_item(conn, item_ids: list[int]) -> dict[int, dict]:
-    if not item_ids:
-        return {}
-    rows = conn.execute(sa.select(item_relevance).where(item_relevance.c.item_id.in_(item_ids)))
-    return {r.item_id: dict(r._mapping) for r in rows}
+    return current_annotation()
 
 
 def primary_importance(conn, since: datetime) -> dict[int, int]:
@@ -273,38 +246,6 @@ def news(conn, f: NewsFilter) -> list[dict]:
         r["links"] = links.get(r["id"], [])
         r["relevance"] = rel.get(r["id"])
     return rows
-
-
-def news_item(conn, item_id: int) -> dict | None:
-    row = conn.execute(
-        sa.select(
-            items,
-            annotations.c.payload_json,
-            annotations.c.model,
-            annotations.c.input_tokens,
-            annotations.c.output_tokens,
-            annotations.c.cost_estimate,
-            annotations.c.prompt_version,
-            raw_items.c.url.label("raw_url"),
-        )
-        .outerjoin(annotations, sa.and_(annotations.c.item_id == items.c.id, _annotated()))
-        .join(raw_items, raw_items.c.id == items.c.raw_item_id)
-        .where(items.c.id == item_id)
-    ).first()
-    if row is None:
-        return None
-    out = dict(row._mapping)
-    out["links"] = links_by_item(conn, [item_id]).get(item_id, [])
-    out["relevance"] = relevance_by_item(conn, [item_id]).get(item_id)
-    out["duplicates"] = [
-        dict(r._mapping)
-        for r in conn.execute(
-            sa.select(items.c.id, items.c.source, items.c.title, items.c.dedup_reason).where(
-                items.c.dedup_group_id == row.dedup_group_id, items.c.id != item_id
-            )
-        )
-    ]
-    return out
 
 
 def reset_annotation(conn, item_id: int) -> None:
@@ -530,8 +471,6 @@ class SubscribersPage:
     events: list = field(default_factory=list)
     active: int = 0
     received: dict = field(default_factory=dict)
-    threshold_preview: list = field(default_factory=list)
-    preview_total: int = 0
 
 
 def subscribers_page(conn, now: datetime) -> SubscribersPage:
@@ -552,14 +491,59 @@ def subscribers_page(conn, now: datetime) -> SubscribersPage:
             .group_by(deliveries.c.channel)
         ).all()
     )
-    imp = primary_importance(conn, now - timedelta(hours=24))
     return SubscribersPage(
         rows=rows,
         events=events[:15],
         active=sum(1 for r in rows if r.is_active),
         received=received,
-        threshold_preview=[
-            {"min": t, "n": sum(1 for v in imp.values() if v >= t)} for t in range(1, 6)
-        ],
-        preview_total=len(imp),
     )
+
+
+# --- deliveries -----------------------------------------------------------------------
+
+
+def delivery_page(conn, rules, now: datetime) -> dict:
+    from trade_news import delivery
+
+    since = now - timedelta(hours=24)
+    counts = dict(
+        conn.execute(
+            sa.select(deliveries.c.status, sa.func.count())
+            .where(deliveries.c.created_at >= since)
+            .group_by(deliveries.c.status)
+        ).all()
+    )
+    passed, total = delivery.matching_items(conn, rules, since)
+    per_threshold = []
+    for t in range(1, 6):
+        n, _ = delivery.matching_items(conn, rules.model_copy(update={"min_importance": t}), since)
+        per_threshold.append({"min": t, "n": len(n)})
+    recent = conn.execute(
+        sa.select(
+            deliveries.c.item_id,
+            deliveries.c.channel,
+            deliveries.c.status,
+            deliveries.c.sent_at,
+            deliveries.c.created_at,
+            deliveries.c.last_error,
+            SUMMARY.label("summary"),
+            subscribers.c.title,
+        )
+        .join(
+            annotations,
+            sa.and_(annotations.c.item_id == deliveries.c.item_id, _annotated()),
+            isouter=True,
+        )
+        .join(
+            subscribers,
+            sa.cast(subscribers.c.chat_id, sa.String) == deliveries.c.channel,
+            isouter=True,
+        )
+        .order_by(deliveries.c.id.desc())
+        .limit(15)
+    ).all()
+    return {
+        "counts": counts,
+        "preview": {"passed": len(passed), "total": total, "per_threshold": per_threshold},
+        "recent": recent,
+    }

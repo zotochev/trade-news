@@ -28,7 +28,7 @@ import sqlalchemy as sa
 import structlog
 from dotenv import load_dotenv
 
-from trade_news import llm, queries, retention
+from trade_news import delivery, llm, queries, retention
 from trade_news.admin import app as admin_app
 from trade_news.annotation import assets as asset_ref
 from trade_news.annotation.run import annotate_pending
@@ -171,6 +171,17 @@ def cmd_run(cfg: Config) -> None:
 
     source_list = [(s.name, s.description) for s in specs]
     bot_thread, bot_stop = start_bot(engine, client, source_list) or (None, None)
+    if (tg_api := telegram_api(client)) is not None:
+        scheduler.add_job(
+            run_delivery_job,
+            "interval",
+            args=(engine, tg_api),
+            seconds=60,
+            next_run_time=utcnow() + timedelta(seconds=45),
+            id="delivery",
+            max_instances=1,
+            coalesce=True,
+        )
     admin_server = admin_app.start_in_thread(
         admin_app.create_app(
             admin_deps(engine, cfg, source_list, llm_client, scheduler, bot_thread)
@@ -336,6 +347,18 @@ def root_chat_id() -> int | None:
     return int(value) if value else None
 
 
+def telegram_api(client: httpx.Client):
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    return make_api(client, token) if token and root_chat_id() is not None else None
+
+
+def run_delivery_job(engine: sa.Engine, api) -> None:
+    try:
+        delivery.run_delivery(engine, api, root_chat_id(), utcnow)
+    except Exception:
+        log.exception("delivery_job_failed")
+
+
 def admin_port() -> int:
     return int(os.environ.get("ADMIN_PORT") or 10000)
 
@@ -368,6 +391,8 @@ def admin_deps(engine, cfg: Config, sources, llm_client, scheduler=None, bot_thr
         annotate_now=annotate_now if llm_client is not None else None,
         reannotate=reannotate if llm_client is not None else None,
         bot_running=(bot_thread.is_alive if bot_thread is not None else None),
+        delivery_configured=bool(os.environ.get("TELEGRAM_BOT_TOKEN"))
+        and root_chat_id() is not None,
     )
 
 

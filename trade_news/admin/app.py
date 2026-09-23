@@ -21,7 +21,9 @@ import structlog
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
+from pydantic import ValidationError
 
+from trade_news import delivery, views
 from trade_news.admin import data
 from trade_news.config import Config
 
@@ -39,6 +41,7 @@ class AdminDeps:
     annotate_now: Callable[[], None] | None = None  # kick the annotation job
     reannotate: Callable[[int], None] | None = None  # annotate one item right away
     bot_running: Callable[[], bool] | None = None
+    delivery_configured: bool = False  # bot token and owner chat id are set
 
 
 # --- template helpers ---------------------------------------------------------------
@@ -144,7 +147,7 @@ def create_app(deps: AdminDeps) -> FastAPI:
         f = _filter(request)
         with deps.engine.connect() as conn:
             rows = data.news(conn, f)
-            selected = data.news_item(conn, id or (rows[0]["id"] if rows else 0))
+            selected = views.news_item(conn, id or (rows[0]["id"] if rows else 0))
         qs = {k: v for k, v in request.query_params.items() if k != "id"}
         return render(
             request,
@@ -206,7 +209,7 @@ def create_app(deps: AdminDeps) -> FastAPI:
     @app.get("/news/{item_id}/raw")
     def news_raw(item_id: int):
         with deps.engine.connect() as conn:
-            item = data.news_item(conn, item_id)
+            item = views.news_item(conn, item_id)
         if item is None:
             return JSONResponse({"error": "not found"}, status_code=404)
         return JSONResponse(item["payload_json"] or {})
@@ -282,12 +285,57 @@ def create_app(deps: AdminDeps) -> FastAPI:
             data.ignore_queue(conn, name, cls, deps.now())
         return RedirectResponse("/assets", status_code=303)
 
-    @app.get("/subscribers", response_class=HTMLResponse)
-    def subscribers_page(request: Request):
+    def subscribers_view(request: Request, rules=None, unsaved=False, error=None):
         with deps.engine.connect() as conn:
             page = data.subscribers_page(conn, deps.now())
+            rules = rules or delivery.load_rules(conn)
+            dpage = data.delivery_page(conn, rules, deps.now())
         bot = None if deps.bot_running is None else deps.bot_running()
-        return render(request, "subscribers.html", "subscribers", page=page, bot=bot)
+        return render(
+            request,
+            "subscribers.html",
+            "subscribers",
+            page=page,
+            bot=bot,
+            rules=rules,
+            d=dpage,
+            unsaved=unsaved,
+            error=error,
+            EVENT_TYPES=delivery.EVENT_TYPES,
+            can_deliver=deps.delivery_configured,
+        )
+
+    @app.get("/subscribers", response_class=HTMLResponse)
+    def subscribers_page(request: Request):
+        return subscribers_view(request)
+
+    @app.post("/delivery/rules", response_class=HTMLResponse)
+    async def delivery_rules(request: Request):
+        form = await request.form()
+        try:
+            rules = delivery.DeliveryRules(
+                enabled=form.get("enabled") == "1",
+                min_importance=int(form.get("min_importance") or 3),
+                require_direction=form.get("require_direction") == "1",
+                event_types=[e for e in form.getlist("event_types") if e in delivery.EVENT_TYPES],
+                asset_classes=[c for c in form.getlist("asset_classes") if c in ASSET_CLASSES],
+                watchlist=[
+                    s.strip().upper()
+                    for s in str(form.get("watchlist") or "").replace(";", ",").split(",")
+                    if s.strip()
+                ],
+                watchlist_min_importance=int(form.get("watchlist_min_importance") or 3),
+                max_per_hour=int(form.get("max_per_hour") or 6),
+                max_age_hours=float(form.get("max_age_hours") or 6),
+            )
+        except (ValueError, ValidationError) as exc:
+            return subscribers_view(request, error=f"Правила не сохранены: {exc}")
+        if form.get("action") != "save":
+            return subscribers_view(request, rules=rules, unsaved=True)
+        with deps.engine.begin() as conn:
+            delivery.save_rules(conn, rules, deps.now())
+        log.info("admin_delivery_rules_saved", **rules.model_dump())
+        return RedirectResponse("/subscribers?saved=1", status_code=303)
 
     return app
 

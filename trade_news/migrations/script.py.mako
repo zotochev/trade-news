@@ -11,6 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 
 import trade_news.db.schema
+from sqlalchemy import Text  # noqa: F401  (autogenerate renders JSONB(astext_type=Text()))
 ${imports if imports else ""}
 
 revision: str = ${repr(up_revision)}

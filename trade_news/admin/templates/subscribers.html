@@ -42,21 +42,84 @@
     {% endif %}
   </section>
 
-  <aside class="card" aria-labelledby="rules-h" style="width: 420px;">
-    <div class="card-head"><h2 id="rules-h">Правила рассылки</h2><span class="pill warn">этап 4</span></div>
-    <p class="small muted" style="margin: 0; line-height: 1.5;">Рассылки пока нет. Ниже видно, сколько размеченных за 24 часа новостей прошло бы при разных порогах importance главного актива: это поможет выбрать порог.</p>
-    <table>
-      <thead><tr><th>Порог</th><th class="num">Прошло бы</th><th style="width: 45%;"></th></tr></thead>
-      <tbody>
-      {% for t in page.threshold_preview %}
-        <tr>
-          <td class="mono">≥ {{ t.min }}</td>
-          <td class="num">{{ t.n }} из {{ page.preview_total }}</td>
-          <td style="vertical-align: middle;"><div class="bar"><div style="width: {{ (100 * t.n / page.preview_total) if page.preview_total else 0 }}%;"></div></div></td>
-        </tr>
+  <aside class="card" aria-labelledby="rules-h" style="width: 460px;">
+    <div class="card-head">
+      <h2 id="rules-h">Правила рассылки</h2>
+      {% if rules.enabled %}<span class="pill ok">включена</span>{% else %}<span class="pill idle">выключена</span>{% endif %}
+    </div>
+    {% if request.query_params.get('saved') %}<div class="flash">Правила сохранены.</div>{% endif %}
+    {% if unsaved %}<div class="note">Предпросмотр по введённым значениям, они <b>не сохранены</b>.</div>{% endif %}
+    {% if error %}<div class="note" style="background: var(--bear-bg); color: var(--bear);">{{ error }}</div>{% endif %}
+    {% if not can_deliver %}<div class="note">Не задан TELEGRAM_BOT_TOKEN или TELEGRAM_CHAT_ID: отправлять некому и нечем.</div>{% endif %}
+
+    <form method="post" action="/delivery/rules" style="display: flex; flex-direction: column; gap: 14px;">
+      <label class="check" style="font-weight: 500;"><input type="checkbox" name="enabled" value="1" {{ 'checked' if rules.enabled }}> Рассылка включена</label>
+
+      <fieldset style="margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 6px;">
+        <legend class="small" style="padding: 0 0 6px; font-weight: 500;">Минимальная importance главного актива</legend>
+        <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px;">
+          {% for t in d.preview.per_threshold %}
+          <label style="display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 52px; justify-content: center; border: 1px solid {{ 'var(--accent)' if t.min == rules.min_importance else 'var(--field)' }}; border-radius: 8px; background: {{ 'var(--accent-soft)' if t.min == rules.min_importance else '#fff' }}; cursor: pointer;">
+            <span><input type="radio" name="min_importance" value="{{ t.min }}" {{ 'checked' if t.min == rules.min_importance }} style="margin: 0 4px 0 0;"><b class="mono">{{ t.min }}</b></span>
+            <span class="small muted">{{ t.n }} за 24 ч</span>
+          </label>
+          {% endfor %}
+        </div>
+      </fieldset>
+
+      <label class="check small"><input type="checkbox" name="require_direction" value="1" {{ 'checked' if rules.require_direction }}> Только с направлением (без нейтральных)</label>
+
+      <fieldset style="margin: 0; padding: 0; border: 0;">
+        <legend class="small" style="padding: 0 0 6px; font-weight: 500;">Типы событий (ни одного = любые)</legend>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 8px;">
+          {% for e in EVENT_TYPES %}<label class="check small" style="min-height: 32px;"><input type="checkbox" name="event_types" value="{{ e }}" {{ 'checked' if e in rules.event_types }}> {{ e }}</label>{% endfor %}
+        </div>
+      </fieldset>
+
+      <fieldset style="margin: 0; padding: 0; border: 0;">
+        <legend class="small" style="padding: 0 0 6px; font-weight: 500;">Классы активов (ни одного = любые)</legend>
+        <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 8px;">
+          {% for c in ASSET_CLASSES %}<label class="check small" style="min-height: 32px;"><input type="checkbox" name="asset_classes" value="{{ c }}" {{ 'checked' if c in rules.asset_classes }}> {{ c }}</label>{% endfor %}
+        </div>
+      </fieldset>
+
+      <div style="display: grid; grid-template-columns: minmax(0, 1fr) 110px; gap: 8px; align-items: end;">
+        <label class="f">Мои активы: присылать всегда, через запятую<input type="text" name="watchlist" value="{{ rules.watchlist | join(', ') }}" placeholder="AAPL, NVDA, EURUSD, BTC" class="mono"></label>
+        <label class="f">от importance<select name="watchlist_min_importance">{% for i in range(1, 6) %}<option {{ 'selected' if i == rules.watchlist_min_importance }}>{{ i }}</option>{% endfor %}</select></label>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;">
+        <label class="f">Не больше в час на чат<input type="text" inputmode="numeric" name="max_per_hour" value="{{ rules.max_per_hour }}" class="mono"></label>
+        <label class="f">Не старше, часов<input type="text" inputmode="decimal" name="max_age_hours" value="{{ '%g' % rules.max_age_hours }}" class="mono"></label>
+      </div>
+
+      <div class="note">
+        <b>За последние 24 ч прошло бы {{ d.preview.passed }} из {{ d.preview.total }}</b> размеченных новостей
+        (на каждого получателя; сверх {{ rules.max_per_hour }} в час остальные ждут своей очереди).
+      </div>
+
+      <div style="display: flex; gap: 8px;">
+        <button type="submit" name="action" value="preview" style="flex-grow: 1;">Проверить</button>
+        <button type="submit" name="action" value="save" class="primary" style="flex-grow: 1;">Сохранить</button>
+      </div>
+    </form>
+
+    <div style="display: flex; flex-direction: column; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line-2);">
+      <h3>Отправки за 24 ч</h3>
+      <div class="small" style="display: flex; gap: 14px; flex-wrap: wrap;">
+        <span>отправлено <b class="mono">{{ d.counts.get('sent', 0) }}</b></span>
+        <span>ждут <b class="mono">{{ d.counts.get('pending', 0) }}</b></span>
+        <span>ошибки <b class="mono">{{ d.counts.get('failed', 0) }}</b></span>
+        <span>устарели <b class="mono">{{ d.counts.get('skipped', 0) }}</b></span>
+      </div>
+      {% for r in d.recent %}
+      <div class="small" style="display: flex; gap: 10px;">
+        <span class="mono muted" style="flex-shrink: 0;">{{ (r.sent_at or r.created_at) | dt }}</span>
+        <span class="pill {{ 'ok' if r.status == 'sent' else ('warn' if r.status == 'failed' else 'idle') }}" {% if r.last_error %}title="{{ r.last_error }}"{% endif %}>{{ r.status }}</span>
+        <a href="/news?id={{ r.item_id }}" class="ellipsis" style="color: inherit; min-width: 0;">{{ r.title or r.channel }}: {{ r.summary }}</a>
+      </div>
       {% endfor %}
-      </tbody>
-    </table>
+    </div>
   </aside>
 </div>
 {% endblock %}

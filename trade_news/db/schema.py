@@ -340,6 +340,15 @@ subscribers = sa.Table(
     sa.Column("unsubscribe_reason", sa.String(16)),  # stop | blocked
 )
 
+# Settings edited from the admin page (e.g. delivery rules), one JSON document per key.
+settings = sa.Table(
+    "settings",
+    metadata,
+    sa.Column("key", sa.String(64), primary_key=True),
+    sa.Column("value", Json, nullable=False),
+    sa.Column("updated_at", UTCDateTime, nullable=False),
+)
+
 deliveries = sa.Table(
     "deliveries",
     metadata,
@@ -348,8 +357,11 @@ deliveries = sa.Table(
     sa.Column("channel", sa.Text, nullable=False),
     sa.Column("sent_at", UTCDateTime),
     sa.Column("message_id", sa.Text),
-    sa.Column("status", sa.String(16), nullable=False),  # pending | sent | failed
+    sa.Column("status", sa.String(16), nullable=False),  # pending | sent | failed | skipped
+    sa.Column("created_at", UTCDateTime),
     sa.Column("attempts", sa.Integer, nullable=False, server_default="0"),
     sa.Column("last_error", sa.Text),
     sa.UniqueConstraint("item_id", "channel"),
+    sa.Index(None, "status", "channel"),
+    sa.Index(None, "sent_at"),
 )

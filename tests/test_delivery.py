@@ -1,0 +1,250 @@
+from datetime import timedelta
+
+import httpx
+import pytest
+import sqlalchemy as sa
+
+from tests.conftest import NOW, news_spec
+from tests.test_admin import admin  # noqa: F401  (fixture)
+from tests.test_annotation import SEC_TICKERS, StubLLM, payload
+from trade_news import delivery
+from trade_news.annotation import assets as ref
+from trade_news.annotation.run import annotate_pending
+from trade_news.collectors.base import Batch, RawItem
+from trade_news.config import LLMConfig
+from trade_news.db.schema import deliveries, subscribers
+from trade_news.delivery import DeliveryRules, passes, run_delivery
+from trade_news.pipeline import ingest
+from trade_news.telegram.api import TelegramError
+from trade_news.telegram.message import format_item
+
+OWNER, ALICE = 111, 222
+
+
+def link(**kw):
+    base = {
+        "asset_class": "equity", "scope": "specific", "symbol": "AAPL", "direction": "bullish",
+        "importance": 3, "is_primary": True,
+    }  # fmt: skip
+    return base | kw
+
+
+@pytest.mark.parametrize(
+    ("links", "event", "ok"),
+    [
+        ([link()], "earnings", True),
+        ([link(importance=2)], "earnings", False),
+        ([link(direction="neutral")], "earnings", False),
+        ([link()], "other", False),  # not a material event
+        ([link(asset_class="crypto", symbol="BTC")], "earnings", True),
+        (
+            [link(importance=2, is_primary=True), link(importance=5, is_primary=False)],
+            "macro",
+            False,
+        ),
+        ([link(importance=2, symbol="NVDA")], "other", True),  # watchlist overrides the rest
+        ([], "earnings", False),
+    ],
+)
+def test_passes(links, event, ok):
+    rules = DeliveryRules(watchlist=["nvda"], watchlist_min_importance=2)
+    assert passes(rules, links, event) is ok
+
+
+def test_rules_roundtrip_default_off(engine):
+    with engine.begin() as conn:
+        assert delivery.load_rules(conn).enabled is False
+        delivery.save_rules(conn, DeliveryRules(enabled=True, min_importance=4), NOW)
+        delivery.save_rules(conn, DeliveryRules(enabled=True, min_importance=5), NOW)
+        assert delivery.load_rules(conn).min_importance == 5
+
+
+class FakeTelegram:
+    def __init__(self):
+        self.sent: list[tuple[int, str]] = []
+        self.fail: dict[int, Exception] = {}  # chat_id → exception to raise (once per call)
+        self.down = False
+
+    def __call__(self, method, **p):
+        assert method == "sendMessage"
+        if self.down:
+            raise httpx.ConnectError("telegram is down")
+        if (exc := self.fail.get(p["chat_id"])) is not None:
+            raise exc
+        self.sent.append((p["chat_id"], p["text"]))
+        return {"message_id": len(self.sent)}
+
+    def to(self, chat):
+        return [t for c, t in self.sent if c == chat]
+
+
+@pytest.fixture
+def world(engine, cfg):
+    """3 annotated items: AAPL bullish 4 (earnings), MSFT bearish 3 (guidance), GOOGL neutral 3."""
+    with engine.begin() as conn:
+        ref.upsert_assets(conn, ref.sec_equities(SEC_TICKERS), "sec")
+        raw = [
+            RawItem(
+                str(i),
+                [
+                    "Apple beats on earnings",
+                    "Microsoft cuts its outlook",
+                    "Alphabet holds a press event",
+                ][i],
+                "b",
+                f"https://x.com/{i}",
+                NOW,
+                {},
+            )
+            for i in range(3)
+        ]
+        ingest(conn, news_spec("news"), Batch(raw), cfg, NOW)
+        conn.execute(
+            subscribers.insert().values(
+                chat_id=ALICE,
+                chat_type="private",
+                title="@alice",
+                is_active=True,
+                subscribed_at=NOW,
+            )
+        )
+    base = payload(0)["assets"][0]
+
+    def answer(its):
+        out = []
+        for it in its:
+            n = ["Apple", "Microsoft", "Alphabet"].index(it.title.split()[0])
+            a = [
+                base | {"importance": 4, "symbol_or_name": "AAPL"},
+                base | {"importance": 3, "symbol_or_name": "MSFT", "direction": "bearish"},
+                base | {"importance": 3, "symbol_or_name": "GOOGL", "direction": "neutral"},
+            ][n]
+            ev = ["earnings", "guidance", "earnings"][n]
+            out.append(payload(it.id, assets=[a], event_type=ev, summary=f"Суть {n} <важно>"))
+        return out
+
+    annotate_pending(engine, StubLLM(answer), LLMConfig(), NOW)
+    return engine
+
+
+def enable(engine, **kw):
+    with engine.begin() as conn:
+        delivery.save_rules(conn, DeliveryRules(enabled=True, **kw), NOW)
+
+
+def statuses(engine):
+    with engine.connect() as conn:
+        return sorted(conn.execute(sa.select(deliveries.c.channel, deliveries.c.status)).all())
+
+
+def test_disabled_sends_nothing(world):
+    tg = FakeTelegram()
+    assert run_delivery(world, tg, OWNER, lambda: NOW).sent == 0
+    assert tg.sent == []
+
+
+def test_sends_to_owner_and_subscribers_once(world):
+    enable(world)
+    tg = FakeTelegram()
+    stats = run_delivery(world, tg, OWNER, lambda: NOW + timedelta(minutes=1))
+    assert (stats.candidates, stats.sent) == (2, 4)  # 2 items (neutral one filtered) × 2 chats
+    assert len(tg.to(OWNER)) == 2 and len(tg.to(ALICE)) == 2
+    aapl = next(t for t in tg.to(OWNER) if "AAPL" in t)
+    assert aapl.startswith("<b>AAPL ▲</b> · важность 4/5")
+    assert "&lt;важно&gt;" in aapl  # summary is escaped for HTML
+    again = run_delivery(world, tg, OWNER, lambda: NOW + timedelta(minutes=2))
+    assert again.sent == 0 and len(tg.sent) == 4
+
+
+def test_hourly_cap_defers_then_sends(world):
+    enable(world, max_per_hour=1)
+    tg = FakeTelegram()
+    s1 = run_delivery(world, tg, OWNER, lambda: NOW + timedelta(minutes=1))
+    assert (s1.sent, s1.deferred) == (2, 2)
+    s2 = run_delivery(world, tg, OWNER, lambda: NOW + timedelta(minutes=30))
+    assert s2.sent == 0
+    s3 = run_delivery(world, tg, OWNER, lambda: NOW + timedelta(minutes=62))
+    assert s3.sent == 2 and len(tg.sent) == 4
+
+
+def test_blocked_chat_is_unsubscribed_others_still_get_it(world):
+    enable(world)
+    tg = FakeTelegram()
+    tg.fail[ALICE] = TelegramError(
+        "sendMessage", 403, "Forbidden: bot was blocked by the user", None
+    )
+    run_delivery(world, tg, OWNER, lambda: NOW + timedelta(minutes=1))
+    assert len(tg.to(OWNER)) == 2
+    with world.connect() as conn:
+        assert conn.execute(sa.select(subscribers.c.is_active)).scalar() is False
+
+
+def test_telegram_down_keeps_rows_pending_and_retries(world):
+    enable(world)
+    tg = FakeTelegram()
+    tg.down = True
+    stats = run_delivery(world, tg, OWNER, lambda: NOW + timedelta(minutes=1))
+    assert stats.stopped == "telegram_unavailable" and stats.sent == 0
+    assert ("111", "pending") in statuses(world)
+    tg.down = False
+    assert run_delivery(world, tg, OWNER, lambda: NOW + timedelta(minutes=2)).sent == 4
+
+
+def test_stale_items_are_never_sent(world):
+    enable(world, max_age_hours=1)
+    tg = FakeTelegram()
+    tg.down = True
+    run_delivery(world, tg, OWNER, lambda: NOW + timedelta(minutes=1))
+    tg.down = False
+    stats = run_delivery(world, tg, OWNER, lambda: NOW + timedelta(hours=2))
+    assert stats.sent == 0 and stats.skipped >= 1
+    assert all(s == "skipped" for _, s in statuses(world))
+
+
+def test_bad_html_falls_back_to_plain_text(world):
+    enable(world)
+    calls = []
+
+    def api(method, **p):
+        calls.append(p)
+        if p.get("parse_mode") == "HTML":
+            raise TelegramError("sendMessage", 400, "Bad Request: can't parse entities", None)
+        return {"message_id": 1}
+
+    assert run_delivery(world, api, OWNER, lambda: NOW + timedelta(minutes=1)).sent == 4
+    assert "<b>" not in calls[1]["text"]
+
+
+def test_format_item_only_links_http():
+    item = {
+        "payload_json": {"summary": "Суть"},
+        "links": [
+            link(importance=4),
+            link(symbol=None, scope="market_wide", asset_class="equity", is_primary=False),
+        ],
+        "relevance": None,
+        "source": "sec_edgar",
+        "raw_url": "javascript:alert(1)",
+    }
+    text = format_item(item)
+    assert "javascript" not in text and "Источник: sec_edgar" in text
+    assert "Также: акции в целом ▲ 3" in text
+
+
+def test_admin_rules_preview_and_save(admin, engine):  # noqa: F811
+    form = {
+        "enabled": "1", "min_importance": "4", "require_direction": "1",
+        "event_types": ["earnings"], "asset_classes": ["equity"], "watchlist": "aapl, nvda",
+        "watchlist_min_importance": "3", "max_per_hour": "5", "max_age_hours": "6",
+    }  # fmt: skip
+    r = admin.post("/delivery/rules", data=form | {"action": "preview"})
+    assert r.status_code == 200 and "не сохранены" in r.text
+    with engine.connect() as conn:
+        assert delivery.load_rules(conn).enabled is False
+    r = admin.post("/delivery/rules", data=form | {"action": "save"}, follow_redirects=False)
+    assert r.status_code == 303
+    with engine.connect() as conn:
+        saved = delivery.load_rules(conn)
+    assert saved.enabled and saved.min_importance == 4 and saved.watchlist == ["AAPL", "NVDA"]
+    bad = admin.post("/delivery/rules", data=form | {"max_per_hour": "999", "action": "save"})
+    assert "не сохранены" in bad.text

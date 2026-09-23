@@ -46,8 +46,8 @@ llm:
   batch_size: 10
   models:
     - name: gemini-3.5-flash-lite
-      daily_request_limit: 100
+      daily_request_limit: 300
       rpm_limit: 15
     - name: gemini-3.1-flash-lite
-      daily_request_limit: 100
+      daily_request_limit: 300
       rpm_limit: 15

@@ -5,13 +5,14 @@
 (`auth_basic`) и проксирует запросы в приложение. Сертификат бесплатный, от Let's Encrypt,
 продлевается автоматически.
 
-Ниже `admin.example.com` означает ваш домен, подставьте его. Команды для Debian.
+Домен: `kainode.duckdns.org` (DuckDNS), он уже прописан в конфиге. Команды для Debian.
 
 ## 0. Что нужно заранее
 
-- Домен или поддомен, например `admin.вашдомен.ru`, у которого A-запись указывает на IP
-  сервера. Проверка: `dig +short admin.вашдомен.ru` должна вернуть IP сервера.
-  DNS обновляется от нескольких минут до часа.
+- В кабинете https://www.duckdns.org у домена `kainode` в поле `current ip` должен стоять IP
+  сервера. Если IP сервера постоянный, его достаточно указать один раз. Если меняется, нужен
+  автообновлятель, инструкция на сайте DuckDNS в разделе install. Проверка:
+  `dig +short kainode.duckdns.org` должна вернуть IP сервера.
 - Открытые порты 80 и 443. Если включён файрвол `ufw`, откройте их командой
   `sudo ufw allow 'Nginx Full'`.
 - Если `ADMIN_PORT` в `.env` отличается от 8080, поменяйте порт в строке `proxy_pass` конфига.
@@ -26,11 +27,11 @@ sudo apt install -y nginx certbot python3-certbot-nginx apache2-utils
 ## 2. Выпустить сертификат
 
 ```bash
-sudo certbot certonly --nginx -d admin.example.com
+sudo certbot certonly --nginx -d kainode.duckdns.org
 ```
 
 При первом запуске certbot спросит email для уведомлений и попросит согласиться с условиями.
-Сертификат появится в `/etc/letsencrypt/live/admin.example.com/`.
+Сертификат появится в `/etc/letsencrypt/live/kainode.duckdns.org/`.
 
 ## 3. Создать логин и пароль
 
@@ -48,7 +49,6 @@ sudo htpasswd -c /etc/nginx/trade-news.htpasswd admin
 
 ```bash
 sudo cp deploy/trade-news-admin.conf /etc/nginx/sites-available/trade-news-admin
-sudo sed -i 's/admin.example.com/admin.вашдомен.ru/g' /etc/nginx/sites-available/trade-news-admin
 sudo ln -s /etc/nginx/sites-available/trade-news-admin /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
@@ -58,7 +58,7 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ## 5. Проверить
 
-Откройте `https://admin.вашдомен.ru`. Браузер должен спросить логин и пароль, а после входа
+Откройте https://kainode.duckdns.org. Браузер должен спросить логин и пароль, а после входа
 показать админку. Пока самой админки ещё нет, вместо неё будет `502 Bad Gateway`: значит,
 nginx и пароль уже работают, просто проксировать пока некуда.
 
@@ -77,8 +77,8 @@ systemctl list-timers | grep certbot
 | Симптом | Что проверить |
 |---|---|
 | certbot: `Timeout during connect` | порт 80 закрыт файрволом или DNS ещё не обновился |
-| certbot: `NXDOMAIN` | у домена нет A-записи |
-| `nginx -t`: `cannot load certificate` | шаг 2 не выполнен или домен в конфиге не заменён |
+| certbot: `NXDOMAIN` или чужой IP | на duckdns.org у `kainode` не указан IP сервера |
+| `nginx -t`: `cannot load certificate` | шаг 2 не выполнен |
 | `502 Bad Gateway` | trade-news не запущен или `ADMIN_PORT` не совпадает с `proxy_pass` |
 | пароль не принимается | `sudo cat /etc/nginx/trade-news.htpasswd`: логин должен быть в файле |
 

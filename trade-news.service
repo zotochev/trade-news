@@ -1,0 +1,23 @@
+[Unit]
+Description=trade-news - market news collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust User/WorkingDirectory/ExecStart to match where the repo is actually
+# cloned and which user should own the process (avoid running as root).
+# .env, config.yaml and data/ are resolved relative to WorkingDirectory.
+User=crip
+WorkingDirectory=/opt/trade-news
+ExecStartPre=/opt/trade-news/.venv/bin/trade-news db-upgrade
+ExecStart=/opt/trade-news/.venv/bin/trade-news run
+Restart=on-failure
+RestartSec=10
+# On stop the scheduler waits for running collectors to finish (SEC can take ~20s per request)
+TimeoutStopSec=120
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

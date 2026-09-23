@@ -1,0 +1,24 @@
+[
+  {
+    "category": "top news",
+    "datetime": 1790186400,
+    "headline": "Fed holds rates steady, signals patience on further cuts",
+    "id": 7512345,
+    "image": "https://example.com/img.jpg",
+    "related": "",
+    "source": "Reuters",
+    "summary": "The Federal Reserve left its benchmark rate unchanged on Wednesday.",
+    "url": "https://www.reuters.com/markets/us/fed-holds-rates-2026-09-23/"
+  },
+  {
+    "category": "company",
+    "datetime": 1790182800,
+    "headline": "Apple shares rise after iPhone demand beats expectations",
+    "id": 7512346,
+    "image": "",
+    "related": "AAPL",
+    "source": "CNBC",
+    "summary": "",
+    "url": "https://www.cnbc.com/2026/09/23/apple-iphone-demand.html"
+  }
+]

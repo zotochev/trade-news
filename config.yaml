@@ -1,0 +1,53 @@
+# Non-secret settings. Secrets (API keys, tokens) go to environment variables, see .env.example.
+# DATABASE_URL env var overrides database_url.
+database_url: sqlite:///data/trade_news.db
+
+dedup:
+  window_hours: 6        # compare only with items published within ±N hours
+  fuzzy_threshold: 90    # rapidfuzz token_sort_ratio, 0..100
+  min_title_len: 20      # shorter titles are not fuzzy-matched (too many false positives)
+
+# Shared limiters. Several sources may point at one key (e.g. all SEC hosts share one quota).
+# Values are deliberately below documented limits.
+rate_limits:
+  sec:                   # documented: 10 req/s per user across all machines
+    calls: 5
+    period: 1
+  finnhub:               # documented free plan: 60 calls/min
+    calls: 45
+    period: 60
+
+sources:
+  sec_edgar:
+    interval_seconds: 120
+    rate_limit: sec
+    params:
+      forms: ["8-K", "10-Q", "10-K", "4"]
+      max_pages: 5       # 100 entries per page; stops early when it reaches known filings
+
+  finnhub_market_news:
+    interval_seconds: 300
+    rate_limit: finnhub
+    params:
+      categories: [general, merger]
+
+  finnhub_company_news:
+    interval_seconds: 900
+    rate_limit: finnhub
+    params:
+      symbols: [AAPL, MSFT, NVDA, AMZN, GOOGL, META, TSLA]
+      lookback_days: 2
+
+# Used from stage 3 (LLM annotation). Only these two models, tried in order.
+# The API key is shared with ict-monitor and Gemini quotas are per *project*, so both apps
+# draw from the same daily limit — keep local caps conservative. Check real numbers in AI Studio.
+llm:
+  provider: gemini
+  batch_size: 10
+  models:
+    - name: gemini-3.5-flash-lite
+      daily_request_limit: 100
+      rpm_limit: 15
+    - name: gemini-3.1-flash-lite
+      daily_request_limit: 100
+      rpm_limit: 15

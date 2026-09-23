@@ -22,7 +22,7 @@ from trade_news.http import RateLimiter, make_getter
 log = structlog.get_logger()
 
 # SQLite has a single writer anyway, and dedup must see items written by other sources.
-_write_lock = threading.Lock()
+WRITE_LOCK = threading.Lock()
 
 
 @dataclass(slots=True)
@@ -215,7 +215,7 @@ def run_source(
         with engine.connect() as conn:
             cursor = _load_cursor(conn, spec.name)
         batch = spec.fetch(ctx, cursor)  # network: outside the write lock
-        with _write_lock, engine.begin() as conn:
+        with WRITE_LOCK, engine.begin() as conn:
             stats = ingest(conn, spec, batch, cfg, fetched_at=utcnow())
             conn.execute(
                 collector_runs.update()

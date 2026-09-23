@@ -148,8 +148,10 @@ assets = sa.Table(
     sa.Column("base_ccy", sa.Text),
     sa.Column("quote_ccy", sa.Text),
     sa.Column("sector", sa.Text),
+    sa.Column("cik", sa.String(10), index=True),  # SEC CIK for equities: exact match for filings
     sa.Column("is_active", sa.Boolean, nullable=False, server_default=sa.true()),
     sa.UniqueConstraint("asset_class", "symbol"),
+    sa.Index(None, "symbol"),
 )
 
 asset_aliases = sa.Table(
@@ -158,6 +160,7 @@ asset_aliases = sa.Table(
     _pk(),
     sa.Column("asset_id", BigId, sa.ForeignKey("assets.id"), nullable=False, index=True),
     sa.Column("alias", sa.Text, nullable=False),
+    sa.Column("alias_norm", sa.Text, nullable=False, index=True),  # see annotation.assets.norm
     sa.Column("lang", sa.Text),
     sa.Column("source", sa.Text),
     sa.UniqueConstraint("alias", "lang"),
@@ -174,6 +177,7 @@ item_assets = sa.Table(
     sa.Column("asset_class", _enum("asset_class", ASSET_CLASSES), nullable=False),
     sa.Column("scope", _enum("scope", SCOPES), nullable=False),
     sa.Column("asset_id", BigId, sa.ForeignKey("assets.id")),
+    sa.Column("raw_symbol", sa.Text),  # symbol_or_name as the LLM returned it
     sa.Column("group_label", sa.Text),
     sa.Column("direction", _enum("direction", DIRECTIONS)),
     sa.Column("importance", sa.SmallInteger),
@@ -220,6 +224,38 @@ annotations = sa.Table(
     sa.Column("input_tokens", sa.Integer),
     sa.Column("output_tokens", sa.Integer),
     sa.Column("cost_estimate", sa.Numeric(12, 6, asdecimal=False)),
+    sa.UniqueConstraint("item_id", "prompt_version"),
+)
+
+# Every LLM request (whatever the outcome). Also the source of truth for local quota tracking,
+# so a restart doesn't forget how many requests were already made today.
+llm_calls = sa.Table(
+    "llm_calls",
+    metadata,
+    _pk(),
+    sa.Column("provider", sa.Text, nullable=False),
+    sa.Column("model", sa.Text, nullable=False),
+    sa.Column("prompt_version", sa.Text),
+    sa.Column("started_at", UTCDateTime, nullable=False),
+    sa.Column("status", sa.String(16), nullable=False),  # ok | quota_day | quota_minute | error
+    sa.Column("n_items", sa.Integer),
+    sa.Column("input_tokens", sa.Integer),
+    sa.Column("output_tokens", sa.Integer),
+    sa.Column("cost_estimate", sa.Numeric(12, 6, asdecimal=False)),
+    sa.Column("error", sa.Text),
+    sa.Index(None, "model", "started_at"),
+)
+
+# Items the LLM failed to annotate validly after a retry; skipped for this prompt_version.
+annotation_dead_letters = sa.Table(
+    "annotation_dead_letters",
+    metadata,
+    _pk(),
+    sa.Column("item_id", BigId, sa.ForeignKey("items.id"), nullable=False),
+    sa.Column("prompt_version", sa.Text, nullable=False),
+    sa.Column("created_at", UTCDateTime, nullable=False, default=_now),
+    sa.Column("error", sa.Text, nullable=False),
+    sa.Column("payload_json", Json),
     sa.UniqueConstraint("item_id", "prompt_version"),
 )
 

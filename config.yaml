@@ -7,6 +7,13 @@ dedup:
   fuzzy_threshold: 90    # rapidfuzz token_sort_ratio, 0..100
   min_title_len: 20      # shorter titles are not fuzzy-matched (too many false positives)
 
+# Old data is deleted by a daily job (and `trade-news cleanup`), whole dedup groups at a time.
+retention:
+  unannotated_days: 30   # never reached the LLM (Form 4, first-run backlog, ...)
+  annotated_days: 365    # kept longer: validation (stage 5) needs history
+  logs_days: 90          # collector_runs, llm_calls
+  interval_hours: 24
+
 # Shared limiters. Several sources may point at one key (e.g. all SEC hosts share one quota).
 # Values are deliberately below documented limits.
 rate_limits:
@@ -38,16 +45,27 @@ sources:
       symbols: [AAPL, MSFT, NVDA, AMZN, GOOGL, META, TSLA]
       lookback_days: 2
 
-# Used from stage 3 (LLM annotation). Only these two models, tried in order.
-# The API key is shared with ict-monitor and Gemini quotas are per *project*, so both apps
-# draw from the same daily limit — keep local caps conservative. Check real numbers in AI Studio.
+# LLM annotation. Only these two models, tried in order. daily_request_limit / rpm_limit are
+# this app's share of the Gemini project quota (the rest belongs to other apps on the same key).
 llm:
   provider: gemini
-  batch_size: 10
-  models:
+  batch_size: 25           # news items per request
+  interval_seconds: 120    # how often the annotation job looks for new items
+  max_batches_per_run: 10
+  max_item_age_hours: 6    # older items (e.g. the first-run backlog) are never annotated
+  body_max_chars: 1500
+  quota_reset_hour_utc: 8  # Gemini daily quota resets at midnight Pacific
+  exclude:                 # not worth a request: stored, but never sent to the LLM
+    - source: sec_edgar
+      title_regex: "^4(/A)? - "   # Form 4 insider filings: hundreds a day
+  models:                  # prices: paid tier USD per 1M tokens, for cost estimates only
     - name: gemini-3.5-flash-lite
       daily_request_limit: 300
       rpm_limit: 15
+      price_in_per_mtok: 0.30
+      price_out_per_mtok: 2.50
     - name: gemini-3.1-flash-lite
       daily_request_limit: 300
       rpm_limit: 15
+      price_in_per_mtok: 0.25
+      price_out_per_mtok: 1.50

@@ -1,0 +1,103 @@
+# Manual reference data. US equities come from SEC company_tickers.json (trade-news assets-seed).
+# symbol is the canonical id (unique per class); symbol and name are aliases automatically.
+# aliases: language-neutral / English, aliases_ru: Russian. Matching is case/punctuation-insensitive.
+
+fx:
+  - {symbol: EURUSD, name: Euro / US Dollar, base: EUR, quote: USD, aliases: [EUR/USD, euro dollar, euro, fiber], aliases_ru: [евродоллар, евро, евро доллар]}
+  - {symbol: GBPUSD, name: British Pound / US Dollar, base: GBP, quote: USD, aliases: [GBP/USD, cable, sterling, pound], aliases_ru: [фунт, фунт стерлингов, кабель]}
+  - {symbol: USDJPY, name: US Dollar / Japanese Yen, base: USD, quote: JPY, aliases: [USD/JPY, yen, dollar yen], aliases_ru: [иена, йена, доллар иена]}
+  - {symbol: USDCHF, name: US Dollar / Swiss Franc, base: USD, quote: CHF, aliases: [USD/CHF, swiss franc, swissie], aliases_ru: [франк, швейцарский франк]}
+  - {symbol: AUDUSD, name: Australian Dollar / US Dollar, base: AUD, quote: USD, aliases: [AUD/USD, aussie, australian dollar], aliases_ru: [австралийский доллар, австралиец]}
+  - {symbol: NZDUSD, name: New Zealand Dollar / US Dollar, base: NZD, quote: USD, aliases: [NZD/USD, kiwi, new zealand dollar], aliases_ru: [новозеландский доллар, киви]}
+  - {symbol: USDCAD, name: US Dollar / Canadian Dollar, base: USD, quote: CAD, aliases: [USD/CAD, loonie, canadian dollar], aliases_ru: [канадский доллар, луни]}
+  - {symbol: EURGBP, name: Euro / British Pound, base: EUR, quote: GBP, aliases: [EUR/GBP]}
+  - {symbol: EURJPY, name: Euro / Japanese Yen, base: EUR, quote: JPY, aliases: [EUR/JPY]}
+  - {symbol: GBPJPY, name: British Pound / Japanese Yen, base: GBP, quote: JPY, aliases: [GBP/JPY]}
+  - {symbol: EURCHF, name: Euro / Swiss Franc, base: EUR, quote: CHF, aliases: [EUR/CHF]}
+  - {symbol: USDCNH, name: US Dollar / Chinese Yuan, base: USD, quote: CNH, aliases: [USD/CNH, USD/CNY, USDCNY, yuan, renminbi], aliases_ru: [юань]}
+  - {symbol: USDRUB, name: US Dollar / Russian Ruble, base: USD, quote: RUB, aliases: [USD/RUB, ruble, rouble], aliases_ru: [рубль, доллар рубль]}
+  - {symbol: USDTRY, name: US Dollar / Turkish Lira, base: USD, quote: TRY, aliases: [USD/TRY, lira, turkish lira], aliases_ru: [лира, турецкая лира]}
+  - {symbol: USDMXN, name: US Dollar / Mexican Peso, base: USD, quote: MXN, aliases: [USD/MXN, mexican peso, peso], aliases_ru: [мексиканское песо]}
+
+crypto:
+  - {symbol: BTC, name: Bitcoin, aliases: [BTCUSD, BTC/USD, BTCUSDT, XBT], aliases_ru: [биткоин, биткойн, биток]}
+  - {symbol: ETH, name: Ethereum, aliases: [ETHUSD, ETH/USD, ETHUSDT, ether], aliases_ru: [эфир, эфириум]}
+  - {symbol: SOL, name: Solana, aliases: [SOLUSD, SOLUSDT], aliases_ru: [солана]}
+  - {symbol: XRP, name: XRP, aliases: [Ripple, XRPUSD, XRPUSDT], aliases_ru: [рипл]}
+  - {symbol: BNB, name: BNB, aliases: [Binance Coin, BNBUSDT]}
+  - {symbol: DOGE, name: Dogecoin, aliases: [DOGEUSDT], aliases_ru: [догикоин, доги]}
+  - {symbol: ADA, name: Cardano, aliases: [ADAUSDT], aliases_ru: [кардано]}
+  - {symbol: TON, name: Toncoin, aliases: [TONUSDT, The Open Network], aliases_ru: [тон, тонкоин]}
+  - {symbol: TRX, name: TRON, aliases: [TRXUSDT], aliases_ru: [трон]}
+  - {symbol: AVAX, name: Avalanche, aliases: [AVAXUSDT], aliases_ru: [аваланч]}
+  - {symbol: LINK, name: Chainlink, aliases: [LINKUSDT], aliases_ru: [чейнлинк]}
+  - {symbol: DOT, name: Polkadot, aliases: [DOTUSDT], aliases_ru: [полкадот]}
+  - {symbol: LTC, name: Litecoin, aliases: [LTCUSDT], aliases_ru: [лайткоин]}
+  - {symbol: USDT, name: Tether, aliases: [tether usdt], aliases_ru: [тезер]}
+  - {symbol: USDC, name: USD Coin, aliases: [circle usdc]}
+
+index:
+  - {symbol: SPX, name: S&P 500, aliases: [SP500, S&P500, US500, "^GSPC", SPY], aliases_ru: [s&p, эс энд пи]}
+  - {symbol: NDX, name: Nasdaq 100, aliases: [NAS100, US100, QQQ, Nasdaq], aliases_ru: [насдак]}
+  - {symbol: DJI, name: Dow Jones Industrial Average, aliases: [Dow, Dow Jones, DJIA, US30], aliases_ru: [доу, доу джонс]}
+  - {symbol: RUT, name: Russell 2000, aliases: [Russell, IWM]}
+  - {symbol: SOX, name: PHLX Semiconductor Index, aliases: [SOXX, semiconductor index, chip index]}
+  - {symbol: VIX, name: CBOE Volatility Index, aliases: [volatility index, fear index], aliases_ru: [индекс страха, викс]}
+  - {symbol: DXY, name: US Dollar Index, aliases: [dollar index, USDX, US dollar, greenback, dollar], aliases_ru: [индекс доллара, доллар]}
+  - {symbol: DAX, name: DAX 40, aliases: [DE40, GER40], aliases_ru: [дакс]}
+  - {symbol: FTSE, name: FTSE 100, aliases: [UK100, footsie]}
+  - {symbol: STOXX50, name: Euro Stoxx 50, aliases: [SX5E, EU50, Euro Stoxx]}
+  - {symbol: NIKKEI, name: Nikkei 225, aliases: [N225, JP225, Nikkei], aliases_ru: [никкей]}
+  - {symbol: HSI, name: Hang Seng, aliases: [HK50, Hang Seng Index], aliases_ru: [хан сэн]}
+  - {symbol: IMOEX, name: MOEX Russia Index, aliases: [MOEX], aliases_ru: [индекс мосбиржи, индекс мосбиржи imoex]}
+
+commodity:
+  - {symbol: XAUUSD, name: Gold, aliases: [XAU, XAU/USD, GC, gold futures], aliases_ru: [золото]}
+  - {symbol: XAGUSD, name: Silver, aliases: [XAG, XAG/USD, SI], aliases_ru: [серебро]}
+  - {symbol: WTI, name: WTI Crude Oil, aliases: [CL, crude oil, crude, oil, US oil, USOIL], aliases_ru: [нефть, нефть wti]}
+  - {symbol: BRENT, name: Brent Crude Oil, aliases: [BZ, UKOIL, Brent oil], aliases_ru: [брент, нефть brent]}
+  - {symbol: NATGAS, name: Natural Gas, aliases: [NG, natural gas, gas, Henry Hub], aliases_ru: [газ, природный газ]}
+  - {symbol: COPPER, name: Copper, aliases: [HG, XCUUSD], aliases_ru: [медь]}
+  - {symbol: PLATINUM, name: Platinum, aliases: [XPT, XPTUSD], aliases_ru: [платина]}
+  - {symbol: WHEAT, name: Wheat, aliases: [ZW], aliases_ru: [пшеница]}
+  - {symbol: CORN, name: Corn, aliases: [ZC], aliases_ru: [кукуруза]}
+
+rates:
+  - {symbol: US2Y, name: US 2-Year Treasury Yield, aliases: [2-year treasury, 2Y treasury, two-year yield, UST2Y], aliases_ru: [двухлетние трежерис]}
+  - {symbol: US10Y, name: US 10-Year Treasury Yield, aliases: [10-year treasury, 10Y treasury, ten-year yield, UST10Y, treasuries], aliases_ru: [десятилетние трежерис, трежерис]}
+  - {symbol: US30Y, name: US 30-Year Treasury Yield, aliases: [30-year treasury, long bond]}
+  - {symbol: FEDFUNDS, name: Federal Funds Rate, aliases: [fed funds, fed funds rate, Fed rate, federal funds], aliases_ru: [ставка фрс]}
+  - {symbol: DE2Y, name: German 2-Year Bund Yield, aliases: [schatz, German 2-year]}
+  - {symbol: DE10Y, name: German 10-Year Bund Yield, aliases: [bund, bunds, German 10-year], aliases_ru: [бунды]}
+  - {symbol: ECBRATE, name: ECB Deposit Facility Rate, aliases: [ECB rate, ECB deposit rate], aliases_ru: [ставка ецб]}
+  - {symbol: BOERATE, name: Bank of England Bank Rate, aliases: [BoE rate, Bank Rate], aliases_ru: [ставка банка англии]}
+  - {symbol: BOJRATE, name: Bank of Japan Policy Rate, aliases: [BoJ rate], aliases_ru: [ставка банка японии]}
+  - {symbol: UK10Y, name: UK 10-Year Gilt Yield, aliases: [gilts, gilt]}
+  - {symbol: JP10Y, name: Japan 10-Year JGB Yield, aliases: [JGB, JGBs]}
+  - {symbol: CBRKEYRATE, name: Bank of Russia Key Rate, aliases: [CBR key rate], aliases_ru: [ключевая ставка, ключевая ставка цб]}
+
+macro:
+  - {symbol: US_CPI, name: US CPI, aliases: [CPI, consumer price index, US inflation], aliases_ru: [инфляция в сша, индекс потребительских цен]}
+  - {symbol: US_NFP, name: US Nonfarm Payrolls, aliases: [NFP, nonfarm payrolls, payrolls, jobs report], aliases_ru: [нонфармы, отчёт по занятости]}
+  - {symbol: US_GDP, name: US GDP, aliases: [GDP, US economy], aliases_ru: [ввп сша]}
+  - {symbol: US_PCE, name: US PCE Price Index, aliases: [PCE, core PCE]}
+  - {symbol: EZ_CPI, name: Eurozone HICP, aliases: [HICP, eurozone inflation], aliases_ru: [инфляция в еврозоне]}
+
+# Extra aliases for US equities (the assets themselves, names and CIKs come from SEC).
+equity:
+  - {symbol: AAPL, aliases_ru: [эпл, эппл, apple]}
+  - {symbol: GOOGL, aliases: [Google, Alphabet Inc], aliases_ru: [гугл, альфабет]}
+  - {symbol: META, aliases: [Facebook, Meta], aliases_ru: [мета, фейсбук]}
+  - {symbol: MSFT, aliases: [Microsoft], aliases_ru: [майкрософт]}
+  - {symbol: NVDA, aliases_ru: [нвидиа, нвидия]}
+  - {symbol: TSLA, aliases_ru: [тесла]}
+  - {symbol: AMZN, aliases: [Amazon, AWS], aliases_ru: [амазон]}
+  - {symbol: BRK-B, aliases: [Berkshire, BRK.B, BRKB], aliases_ru: [беркшир]}
+  - {symbol: JPM, aliases: [JPMorgan, JP Morgan, JPMorgan Chase]}
+  - {symbol: GS, aliases: [Goldman, Goldman Sachs]}
+  - {symbol: NFLX, aliases_ru: [нетфликс]}
+  - {symbol: INTC, aliases_ru: [интел]}
+  - {symbol: AMD, aliases: [Advanced Micro Devices]}
+  - {symbol: TSM, aliases: [TSMC, Taiwan Semiconductor]}
+  - {symbol: MSTR, aliases: [MicroStrategy, Strategy]}
+  - {symbol: COIN, aliases: [Coinbase]}

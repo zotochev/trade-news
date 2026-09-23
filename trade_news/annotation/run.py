@@ -54,13 +54,19 @@ class AnnotateStats:
 
 
 def pending_items(
-    conn: sa.Connection, cfg: LLMConfig, now: datetime, limit: int
+    conn: sa.Connection,
+    cfg: LLMConfig,
+    now: datetime,
+    limit: int,
+    only_ids: list[int] | None = None,
 ) -> list[ItemForAnnotation]:
+    """Items waiting for annotation. `only_ids` (manual re-annotation from the admin page)
+    skips the age and exclusion filters."""
     done = sa.select(annotations.c.item_id).where(annotations.c.prompt_version == PROMPT_VERSION)
     dead = sa.select(annotation_dead_letters.c.item_id).where(
         annotation_dead_letters.c.prompt_version == PROMPT_VERSION
     )
-    whole_source_excluded = [e.source for e in cfg.exclude if not e.title_regex]
+    whole_source_excluded = [] if only_ids else [e.source for e in cfg.exclude if not e.title_regex]
     q = (
         sa.select(
             items.c.id,
@@ -72,15 +78,24 @@ def pending_items(
         )
         .join(raw_items, raw_items.c.id == items.c.raw_item_id)
         .where(
-            items.c.id == items.c.dedup_group_id,
-            items.c.fetched_at >= now - timedelta(hours=cfg.max_item_age_hours),
             items.c.id.not_in(done),
             items.c.id.not_in(dead),
             items.c.source.not_in(whole_source_excluded),
         )
         .order_by(items.c.published_at.desc())
     )
-    regexes = [(e.source, re.compile(e.title_regex)) for e in cfg.exclude if e.title_regex]
+    if only_ids:
+        q = q.where(items.c.id.in_(only_ids))
+    else:
+        q = q.where(
+            items.c.id == items.c.dedup_group_id,
+            items.c.fetched_at >= now - timedelta(hours=cfg.max_item_age_hours),
+        )
+    regexes = (
+        []
+        if only_ids
+        else [(e.source, re.compile(e.title_regex)) for e in cfg.exclude if e.title_regex]
+    )
     out = []
     for row in conn.execute(q):
         if any(src == row.source and rx.search(row.title or "") for src, rx in regexes):
@@ -112,11 +127,16 @@ def _hints(conn: sa.Connection, source: str, raw: dict) -> str | None:
 
 
 def annotate_pending(
-    engine: sa.Engine, client: LLMClient, cfg: LLMConfig, now: datetime
+    engine: sa.Engine,
+    client: LLMClient,
+    cfg: LLMConfig,
+    now: datetime,
+    only_ids: list[int] | None = None,
 ) -> AnnotateStats:
     stats = AnnotateStats()
     with engine.connect() as conn:
-        todo = pending_items(conn, cfg, now, cfg.batch_size * cfg.max_batches_per_run)
+        limit = len(only_ids) if only_ids else cfg.batch_size * cfg.max_batches_per_run
+        todo = pending_items(conn, cfg, now, limit, only_ids)
     for i in range(0, len(todo), cfg.batch_size):
         batch = todo[i : i + cfg.batch_size]
         try:

@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Обзор{% endblock %}
+{% block content %}
+<header class="page">
+  <div>
+    <h1>Обзор</h1>
+    <p class="sub">За последние {{ {24: '24 часа', 168: '7 дней', 720: '30 дней'}[ov.hours] }} · время UTC · обновлено {{ now | dt('%H:%M') }}</p>
+  </div>
+  <div style="display: flex; gap: 8px; align-items: center;">
+    <form method="get" action="/">
+      <label class="check small muted">Период
+        <select name="hours" onchange="this.form.submit()">
+          {% for h, t in [(24, '24 часа'), (168, '7 дней'), (720, '30 дней')] %}<option value="{{ h }}" {{ 'selected' if h == ov.hours }}>{{ t }}</option>{% endfor %}
+        </select>
+      </label>
+    </form>
+    {% if can_annotate %}
+    <form method="post" action="/annotate-now"><button class="primary" type="submit">Разметить сейчас</button></form>
+    {% endif %}
+  </div>
+</header>
+{% if request.query_params.get('annotating') %}<div class="flash">Разметка запущена, результат появится через минуту.</div>{% endif %}
+
+<section class="kpis" aria-label="Ключевые показатели">
+  <div class="kpi"><span class="l">Собрано записей</span><span class="v">{{ ov.inserted | int }}</span><span class="n">из {{ ov.fetched | int }} полученных</span></div>
+  <div class="kpi"><span class="l">Склеено дублей</span><span class="v">{{ ov.merged | int }}</span><span class="n">по URL, заголовку, похожести</span></div>
+  <div class="kpi"><span class="l">Размечено</span><span class="v">{{ ov.annotated | int }}</span><span class="n">{{ ov.llm_calls }} запросов к LLM</span></div>
+  <div class="kpi"><span class="l">Нераспознанные активы</span><span class="v">{{ '%.1f%%' % (100 * ov.unresolved / ov.specific) if ov.specific else '—' }}</span><span class="n">{{ ov.unresolved }} из {{ ov.specific }} привязок</span></div>
+  <div class="kpi"><span class="l">Отправлено в Telegram</span><span class="v">{{ ov.sent | int }}</span><span class="n">рассылка: этап 4</span></div>
+  <div class="kpi"><span class="l">Подписчики</span><span class="v">{{ ov.subscribers }}</span><span class="n">плюс владелец</span></div>
+</section>
+
+<div class="grid cols-3">
+  <section class="card span-2" aria-labelledby="src-h">
+    <div class="card-head"><h2 id="src-h">Источники</h2><span class="small muted">из collector_runs</span></div>
+    <table>
+      <thead><tr><th>Источник</th><th>Статус</th><th>Последний сбор</th><th class="num">Запусков</th><th class="num">Ошибок</th><th class="num">Новых</th><th class="num">Уже были</th><th class="num">Склеено</th></tr></thead>
+      <tbody>
+      {% for s in ov.sources %}
+        <tr>
+          <td><div style="font-weight: 500;">{{ s.status.description }}</div><div class="mono small muted">{{ s.status.name }}</div></td>
+          <td>
+            {% if s.status.last_status == 'ok' %}<span class="pill ok">работает</span>
+            {% elif s.status.last_status == 'running' %}<span class="pill idle">идёт сбор</span>
+            {% elif s.status.last_status in ('error', 'aborted') %}<span class="pill warn">ошибка</span>
+            {% else %}<span class="pill idle">ещё не было</span>{% endif %}
+          </td>
+          <td>{{ ago(s.status.last_started) }}</td>
+          <td class="num">{{ s.runs }}</td>
+          <td class="num">{{ s.errors }}</td>
+          <td class="num">{{ s.inserted | int }}</td>
+          <td class="num muted">{{ s.seen | int }}</td>
+          <td class="num">{{ s.merged }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8" class="empty">Ни один источник не запущен</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+
+    <h2 style="margin-top: 8px;">Свежая разметка, importance ≥ 3</h2>
+    {% for r in ov.recent %}
+    <a href="/news?id={{ r.id }}" style="display: flex; align-items: center; gap: 14px; padding: 8px 0; border-bottom: 1px solid var(--line-2); color: inherit;">
+      <span class="mono muted" style="width: 44px; flex-shrink: 0;">{{ r.published_at | dt('%H:%M') }}</span>
+      <span class="imp imp-{{ r.imp }}">{{ r.imp }}</span>
+      <span class="mono" style="width: 80px; flex-shrink: 0; font-weight: 500;">{{ r.link.label if r.link else '' }}</span>
+      {% set d = DIRECTION.get(r.link.direction) if r.link else None %}
+      <span class="small dir-{{ d[2] if d else 'neut' }}" style="width: 84px; flex-shrink: 0;">{{ d[0] if d else '' }}</span>
+      <span class="ellipsis" style="flex-grow: 1; min-width: 0;">{{ r.summary }}</span>
+    </a>
+    {% else %}
+    <p class="muted">Пока нет размеченных новостей с importance от 3.</p>
+    {% endfor %}
+  </section>
+
+  <div style="display: flex; flex-direction: column; gap: 20px; min-width: 0;">
+    <section class="card" aria-labelledby="q-h">
+      <div class="card-head"><h2 id="q-h">Квота LLM</h2><span class="small muted">сброс в {{ '%02d' % ov.reset_hour }}:00 UTC</span></div>
+      {% for q in ov.quota %}
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <div style="display: flex; justify-content: space-between;" class="small"><span class="mono">{{ q.model.name }}</span><span class="mono">{{ q.used }} / {{ q.model.daily_request_limit }}</span></div>
+        <div class="bar {{ 'full' if q.exhausted }}"><div style="width: {{ '%.1f' % q.pct }}%;"></div></div>
+        {% if q.exhausted %}<span class="small" style="color: var(--bear);">провайдер сообщил: дневной лимит исчерпан</span>{% endif %}
+      </div>
+      {% endfor %}
+      <a href="/llm" class="small" style="font-weight: 500;">Расход подробно</a>
+    </section>
+
+    <section class="card" aria-labelledby="imp-h">
+      <h2 id="imp-h">Распределение importance</h2>
+      <p class="small muted" style="margin: 0;">Главный актив новости, {{ ov.hist_total }} размеченных</p>
+      <div class="hist">
+        {% for h in ov.histogram %}
+        <div>
+          <span class="mono small">{{ h.count }}</span>
+          <div class="col {{ 'pass' if h.imp >= 4 }}" style="height: {{ (100 * h.count / ov.hist_max) if ov.hist_max else 0 }}%;"></div>
+          <span class="mono small muted">{{ h.imp }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

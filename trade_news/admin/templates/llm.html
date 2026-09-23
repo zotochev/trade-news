@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}LLM и расход{% endblock %}
+{% block content %}
+<header class="page">
+  <div>
+    <h1>LLM и расход</h1>
+    <p class="sub">Из журнала llm_calls · стоимость по ценам платного тарифа</p>
+  </div>
+  <form method="get" action="/llm">
+    <label class="check small muted">Период
+      <select name="days" onchange="this.form.submit()">
+        {% for d, t in [(1, 'Сегодня'), (7, '7 дней'), (30, '30 дней')] %}<option value="{{ d }}" {{ 'selected' if d == u.days }}>{{ t }}</option>{% endfor %}
+      </select>
+    </label>
+  </form>
+</header>
+
+{% set calls_today = u.quota | sum(attribute='used') %}
+{% set limit_today = models | sum(attribute='daily_request_limit') %}
+<section class="kpis" aria-label="Итоги">
+  <div class="kpi"><span class="l">Запросов сегодня</span><span class="v">{{ calls_today }}</span><span class="n">из {{ limit_today }} по всем моделям</span></div>
+  <div class="kpi"><span class="l">Токены на входе</span><span class="v">{{ u.total_in | int }}</span><span class="n">промпт и новости</span></div>
+  <div class="kpi"><span class="l">Токены на выходе</span><span class="v">{{ u.total_out | int }}</span><span class="n">включая «размышления»</span></div>
+  <div class="kpi"><span class="l">Оценка стоимости</span><span class="v">${{ '%.3f' % u.total_cost }}</span><span class="n">по ценам платного тарифа</span></div>
+  <div class="kpi"><span class="l">Размечено</span><span class="v">{{ u.annotated | int }}</span><span class="n">dead letters: {{ u.dead_letters }}</span></div>
+</section>
+
+<div class="grid cols-5">
+  <section class="card span-3" aria-labelledby="daily-h">
+    <div class="card-head">
+      <h2 id="daily-h">Токены по дням</h2>
+      <div class="small" style="display: flex; gap: 14px;">
+        <span><svg width="10" height="10" aria-hidden="true"><rect width="10" height="10" rx="2" fill="#9cc9c4"></rect></svg> вход</span>
+        <span><svg width="10" height="10" aria-hidden="true"><rect width="10" height="10" rx="2" fill="#0b5e5e"></rect></svg> выход</span>
+      </div>
+    </div>
+    <div style="display: flex; align-items: flex-end; gap: {{ 14 if u.days <= 7 else 4 }}px; height: 190px;">
+      {% for d in u.by_day %}
+      {% set total = d.tin + d.tout %}
+      <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; min-width: 0;" title="{{ d.date }}: вход {{ d.tin }}, выход {{ d.tout }}, запросов {{ d.calls }}">
+        {% if u.days <= 7 %}<span class="mono" style="font-size: 11px; color: var(--ink-2);">{{ '%.1fk' % (total / 1000) if total else '—' }}</span>{% endif %}
+        <div style="width: 100%; height: {{ (100 * total / u.peak) if u.peak else 0 }}%; min-height: 2px; display: flex; flex-direction: column; border-radius: 4px 4px 0 0; overflow: hidden; background: #ebe8e0;">
+          <div style="height: {{ (100 * d.tout / total) if total else 0 }}%; background: #0b5e5e;"></div>
+          <div style="flex-grow: 1; background: {{ '#9cc9c4' if total else '#ebe8e0' }};"></div>
+        </div>
+        {% if u.days <= 7 or loop.index0 % 5 == 0 %}<span class="mono small muted">{{ d.date.strftime('%d.%m') }}</span>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="card span-2" aria-labelledby="unit-h">
+    <h2 id="unit-h">На одну новость</h2>
+    <div class="kv" style="grid-template-columns: minmax(0, 1fr) auto; font-size: 13px;">
+      <span>токенов на входе</span><span class="mono">{{ '%.0f' % u.per_item.tin }}</span>
+      <span>токенов на выходе</span><span class="mono">{{ '%.0f' % u.per_item.tout }}</span>
+      <span>стоимость</span><span class="mono">${{ '%.4f' % u.per_item.cost }}</span>
+      <span>новостей в запросе</span><span class="mono">{{ '%.0f' % u.per_item.batch }}</span>
+    </div>
+    {% if u.per_item.batch %}
+    <div class="note">
+      <div style="font-weight: 600; color: #0b4a4a;">1 000 новостей в день ≈ ${{ '%.2f' % (1000 * u.per_item.cost) }} и {{ '%.0f' % (1000 / u.per_item.batch) }} запросов</div>
+      <div style="color: var(--ink-2);">На бесплатном тарифе платить не нужно, считаются только запросы к квоте.</div>
+    </div>
+    {% endif %}
+  </section>
+</div>
+
+<div class="grid cols-5">
+  <section class="card span-2" aria-labelledby="models-h">
+    <h2 id="models-h">По моделям</h2>
+    <table>
+      <thead><tr><th>Модель</th><th class="num">Сегодня</th><th class="num">Токены</th><th class="num">$</th></tr></thead>
+      <tbody>
+      {% for q in u.quota %}{% set m = u.per_model[q.model.name] %}
+        <tr>
+          <td><div class="mono">{{ q.model.name }}</div><div class="small muted">${{ q.model.price_in_per_mtok }} / ${{ q.model.price_out_per_mtok }} за 1M{% if q.exhausted %} · <span style="color: var(--bear);">лимит на сегодня исчерпан</span>{% endif %}</div></td>
+          <td class="num">{{ q.used }} / {{ q.model.daily_request_limit }}</td>
+          <td class="num">{{ m.tokens | int }}</td>
+          <td class="num">{{ '%.3f' % m.cost }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% set all = u.per_model.values() | list %}
+    <div class="kv" style="grid-template-columns: minmax(0, 1fr) auto;">
+      <span>429 «в минуту» / «в день»</span><span class="mono">{{ all | sum(attribute='quota_minute') }} / {{ all | sum(attribute='quota_day') }}</span>
+      <span>Ошибки провайдера</span><span class="mono">{{ all | sum(attribute='error') }}</span>
+    </div>
+  </section>
+
+  <section class="card span-3" aria-labelledby="calls-h">
+    <h2 id="calls-h">Последние вызовы</h2>
+    <table>
+      <thead><tr><th>UTC</th><th>Модель</th><th>Статус</th><th class="num">Новостей</th><th class="num">Вход</th><th class="num">Выход</th><th class="num">$</th></tr></thead>
+      <tbody>
+      {% for c in u.recent %}
+        <tr>
+          <td class="mono muted">{{ c.started_at | dt('%d.%m %H:%M:%S') }}</td>
+          <td class="mono">{{ c.model }}</td>
+          <td><span class="pill {{ 'ok' if c.status == 'ok' else 'warn' }}" {% if c.error %}title="{{ c.error }}"{% endif %}>{{ c.status }}</span></td>
+          <td class="num">{{ c.n_items or '—' }}</td>
+          <td class="num">{{ c.input_tokens | int if c.input_tokens else '—' }}</td>
+          <td class="num">{{ c.output_tokens | int if c.output_tokens else '—' }}</td>
+          <td class="num">{{ '%.4f' % c.cost_estimate if c.cost_estimate else '—' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="empty">Вызовов за период нет</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+{% endblock %}

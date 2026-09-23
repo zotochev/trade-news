@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Лента{% endblock %}
+{% macro chip(link) -%}
+{%- set d = DIRECTION.get(link.direction) -%}
+<span class="chip {{ 'unres' if link.unresolved else (d[2] if d else 'neut') }}" title="{{ link.asset_class }}/{{ link.scope }}">{{ link.label }}{% if d %} {{ d[1] }}{% endif %}<b>{{ link.importance }}</b></span>
+{%- endmacro %}
+{% block content %}
+<header class="page">
+  <div>
+    <h1>Лента</h1>
+    <p class="sub">Размеченные сюжеты, по одному на группу дублей · {{ rows | length }} в выборке</p>
+  </div>
+  <a href="/news.csv?{{ qs }}">Выгрузить CSV</a>
+</header>
+
+<form class="filters" method="get" action="/news" aria-label="Фильтры">
+  <label class="f">Поиск<input type="search" name="q" value="{{ f.q }}" placeholder="тикер, компания, слово" style="width: 220px;"></label>
+  <label class="f">Класс
+    <select name="asset_class"><option value="">Все</option>{% for c in ASSET_CLASSES %}<option {{ 'selected' if c == f.asset_class }}>{{ c }}</option>{% endfor %}</select>
+  </label>
+  <label class="f">Importance от
+    <select name="min_importance">{% for i in range(1, 6) %}<option {{ 'selected' if i == f.min_importance }}>{{ i }}</option>{% endfor %}</select>
+  </label>
+  <label class="f">Направление
+    <select name="direction"><option value="">Любое</option>{% for k, v in DIRECTION.items() %}<option value="{{ k }}" {{ 'selected' if k == f.direction }}>{{ v[0] }}</option>{% endfor %}</select>
+  </label>
+  <label class="f">Источник
+    <select name="source"><option value="">Все</option>{% for s in sources %}<option {{ 'selected' if s == f.source }}>{{ s }}</option>{% endfor %}</select>
+  </label>
+  <label class="check"><input type="checkbox" name="review" value="1" {{ 'checked' if f.review_only }}> Только на проверку</label>
+  <button type="submit" class="primary">Показать</button>
+  <a href="/news" class="small">Сбросить</a>
+</form>
+
+<div class="split">
+  <section class="card grow" aria-label="Записи" style="padding: 0; overflow: hidden;">
+    <table style="table-layout: fixed;">
+      <thead><tr style="background: #faf9f6;">
+        <th style="width: 88px; padding-left: 16px;">UTC</th><th>Суть</th><th style="width: 210px;">Активы</th><th style="width: 140px; padding-right: 16px;">Применимость</th>
+      </tr></thead>
+      <tbody>
+      {% for r in rows %}
+        {% set rel = r.relevance or {} %}
+        <tr class="clickable {{ 'sel' if selected and selected.id == r.id }}">
+          <td class="mono muted" style="padding-left: 16px;">{{ r.published_at | dt }}</td>
+          <td>
+            <a href="/news?{{ qs }}{{ '&' if qs }}id={{ r.id }}" style="color: inherit; font-weight: 500; line-height: 1.35;">{{ r.summary }}</a>
+            <div class="small muted ellipsis" style="margin-top: 3px;">{{ r.source }} · {{ r.title }}</div>
+          </td>
+          <td><div style="display: flex; flex-wrap: wrap; gap: 4px;">{% for link in r.links %}{{ chip(link) }}{% endfor %}</div></td>
+          <td class="small" style="padding-right: 16px;">
+            {% if rel.needs_review %}<div style="font-weight: 500; color: var(--bear);">на проверку</div>{% endif %}
+            <div style="font-weight: 500;">{{ {'immediate': 'сразу', 'scheduled': 'событие', 'window': 'период', 'unknown': 'неизвестно'}.get(rel.relevance_type, '—') }}</div>
+            <div class="muted">{{ rel.relevant_from | dt if rel.relevant_from else '' }}{% if rel.relevant_to %} – {{ rel.relevant_to | dt('%d.%m') }}{% endif %}</div>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="empty">Ничего не найдено</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  {% if selected %}
+  {% set p = selected.payload_json or {} %}
+  {% set rel = selected.relevance or {} %}
+  <aside class="card" aria-labelledby="card-h">
+    <div class="card-head"><h2 id="card-h">Запись #{{ selected.id }}</h2><span class="mono small muted">{{ p.get('event_type', '—') }} · prompt {{ selected.prompt_version or '—' }}</span></div>
+    {% if p %}<p style="margin: 0; font-size: 15px; line-height: 1.45;">{{ p.get('summary') }}</p>{% else %}<p class="muted" style="margin: 0;">Ещё не размечена.</p>{% endif %}
+    <p class="small muted" style="margin: 0; line-height: 1.45;">{{ selected.title }} · {{ selected.source }} · {{ selected.published_at | dt }}</p>
+    {% if selected.raw_url and selected.raw_url.startswith(('https://', 'http://')) %}<a href="{{ selected.raw_url }}" target="_blank" rel="noopener noreferrer" style="font-weight: 500;">Открыть первоисточник</a>{% endif %}
+
+    {% if selected.links %}
+    <div style="display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line-2);">
+      <h3>Привязки</h3>
+      <table style="font-size: 12px;">
+        <thead><tr><th>актив</th><th>направл.</th><th class="num">imp · conf</th><th>главный</th></tr></thead>
+        <tbody>{% for link in selected.links %}{% set d = DIRECTION.get(link.direction) %}
+          <tr><td class="mono" style="font-weight: 500;">{{ link.label }}<div class="muted" style="font-weight: 400;">{{ link.asset_class }}/{{ link.scope }}</div></td>
+          <td class="dir-{{ d[2] if d else 'neut' }}">{{ d[0] if d else '—' }}</td>
+          <td class="num">{{ link.importance }} · {{ '%.2f' % (link.confidence or 0) }}</td>
+          <td>{{ 'да' if link.is_primary else 'нет' }}</td></tr>
+        {% endfor %}</tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    {% if rel %}
+    <div style="display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid var(--line-2);">
+      <h3>Применимость{% if rel.needs_review %} <span class="pill warn">на проверку</span>{% endif %}</h3>
+      <div class="kv">
+        <span>тип</span><span>{{ rel.relevance_type }}</span>
+        <span>с</span><span class="mono">{{ rel.relevant_from | dt('%Y-%m-%d %H:%M') if rel.relevant_from else '—' }}</span>
+        {% if rel.relevant_to %}<span>по</span><span class="mono">{{ rel.relevant_to | dt('%Y-%m-%d') }}</span>{% endif %}
+        <span>фраза</span><span>{{ '«' ~ rel.raw_phrase ~ '»' if rel.raw_phrase else '—' }}</span>
+        <span>разрешено</span><span>{{ rel.resolved_by }}, точность {{ rel.date_precision }}</span>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if selected.model %}
+    <div style="display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid var(--line-2);">
+      <h3>Вызов LLM</h3>
+      <div class="kv">
+        <span>модель</span><span class="mono">{{ selected.model }}</span>
+        <span>токены</span><span class="mono">{{ selected.input_tokens }} / {{ selected.output_tokens }}</span>
+        <span>стоимость</span><span class="mono">${{ '%.5f' % (selected.cost_estimate or 0) }}</span>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if selected.duplicates %}
+    <div style="display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid var(--line-2);">
+      <h3>Дубли ({{ selected.duplicates | length }})</h3>
+      {% for d in selected.duplicates %}<div class="small"><span class="mono muted">{{ d.source }} · {{ d.dedup_reason }}</span><div class="ellipsis">{{ d.title }}</div></div>{% endfor %}
+    </div>
+    {% endif %}
+
+    <div style="display: flex; gap: 8px;">
+      <a class="btn" style="flex-grow: 1;" href="/news/{{ selected.id }}/raw" target="_blank">Сырой JSON</a>
+      {% if can_reannotate %}
+      <form method="post" action="/news/{{ selected.id }}/reannotate" style="flex-grow: 1; display: flex;">
+        <button class="primary" type="submit" style="flex-grow: 1;">Переразметить</button>
+      </form>
+      {% endif %}
+    </div>
+  </aside>
+  {% endif %}
+</div>
+{% endblock %}

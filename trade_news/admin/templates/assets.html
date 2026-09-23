@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Нераспознанные активы{% endblock %}
+{% block content %}
+<header class="page">
+  <div>
+    <h1>Нераспознанные активы</h1>
+    <p class="sub">LLM назвала инструмент, которого нет в справочнике. Привязка сохраняет алиас, и в следующий раз он распознается сам.</p>
+  </div>
+</header>
+
+<div style="display: flex; gap: 12px; flex-wrap: wrap;">
+  <div class="kpi" style="flex-direction: row; gap: 8px; padding: 10px 14px;">В очереди <b class="mono">{{ queue | length }}</b></div>
+  <div class="kpi" style="flex-direction: row; gap: 8px; padding: 10px 14px;">В справочнике <b class="mono">{{ counts.assets | int }}</b> активов · <b class="mono">{{ counts.aliases | int }}</b> алиасов</div>
+</div>
+
+<div class="split">
+  <section class="card grow" aria-label="Очередь" style="padding: 0; overflow: hidden;">
+    <table>
+      <thead><tr style="background: #faf9f6;"><th style="padding-left: 16px;">Как назвала LLM</th><th>Класс</th><th class="num">Раз</th><th style="padding-right: 16px;">Пример</th></tr></thead>
+      <tbody>
+      {% for x in queue %}
+        <tr class="clickable {{ 'sel' if current and current.name == x.name and current.asset_class == x.asset_class }}">
+          <td class="mono" style="padding-left: 16px; font-weight: 500;"><a href="/assets?name={{ x.name | urlencode }}&cls={{ x.asset_class }}" style="color: inherit;">{{ x.name }}</a></td>
+          <td class="mono">{{ x.asset_class }}</td>
+          <td class="num">{{ x.n }}</td>
+          <td class="ellipsis" style="max-width: 460px; padding-right: 16px;">{{ x.example }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="empty">Очередь пуста: все активы распознаны</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  {% if current %}
+  <aside class="card" aria-labelledby="fix-h">
+    <h2 id="fix-h">Разобрать «{{ current.name }}»</h2>
+    <p class="small" style="margin: 0; line-height: 1.45; color: var(--ink-2);">{{ current.asset_class }} · {{ current.n }} раз · «{{ current.example }}»</p>
+
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <h3>Привязать к существующему</h3>
+      <form method="get" action="/assets" style="display: flex; gap: 8px;">
+        <input type="hidden" name="name" value="{{ current.name }}"><input type="hidden" name="cls" value="{{ current.asset_class }}">
+        <label class="f" style="flex-grow: 1;">Найти актив<input type="search" name="q" value="{{ search }}"></label>
+        <button type="submit" style="align-self: flex-end;">Найти</button>
+      </form>
+      {% if found %}
+      <form method="post" action="/assets/link" style="display: flex; flex-direction: column; gap: 8px;">
+        <input type="hidden" name="name" value="{{ current.name }}"><input type="hidden" name="cls" value="{{ current.asset_class }}">
+        <fieldset style="margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden;">
+          <legend class="small muted" style="padding: 0 6px;">Результаты</legend>
+          {% for a in found %}
+          <label class="check" style="padding: 0 12px; border-bottom: 1px solid var(--line-2); font-size: 13px;">
+            <input type="radio" name="asset_id" value="{{ a.id }}" {{ 'checked' if loop.first }}>
+            <span><b class="mono">{{ a.symbol }}</b> · {{ a.name or '' }} <span class="muted small">{{ a.asset_class }}</span></span>
+          </label>
+          {% endfor %}
+        </fieldset>
+        <label class="check small"><input type="checkbox" name="save_alias" value="1" checked> Сохранить «{{ current.name }}» как алиас</label>
+        <button class="primary" type="submit">Привязать</button>
+      </form>
+      {% else %}
+      <div class="small muted" style="min-height: 44px; display: flex; align-items: center; padding: 0 12px; border: 1px dashed var(--field); border-radius: 8px;">В справочнике ничего не найдено</div>
+      {% endif %}
+    </div>
+
+    <form method="post" action="/assets/create" style="display: flex; flex-direction: column; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line-2);">
+      <h3>Или завести новый актив</h3>
+      <input type="hidden" name="name" value="{{ current.name }}"><input type="hidden" name="cls" value="{{ current.asset_class }}">
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;">
+        <label class="f">Символ<input type="text" name="symbol" value="{{ current.name if current.name | length <= 12 else '' }}" required class="mono"></label>
+        <label class="f">Класс<select name="asset_class">{% for c in ASSET_CLASSES %}<option {{ 'selected' if c == current.asset_class }}>{{ c }}</option>{% endfor %}</select></label>
+      </div>
+      <label class="f">Название<input type="text" name="title" value="{{ current.name if current.name | length > 12 else '' }}"></label>
+      <button type="submit">Создать и привязать</button>
+    </form>
+
+    <form method="post" action="/assets/ignore">
+      <input type="hidden" name="name" value="{{ current.name }}"><input type="hidden" name="cls" value="{{ current.asset_class }}">
+      <button type="submit" class="ghost" style="width: 100%;">Игнорировать (не инструмент или не торгуется)</button>
+    </form>
+  </aside>
+  {% endif %}
+</div>
+{% endblock %}

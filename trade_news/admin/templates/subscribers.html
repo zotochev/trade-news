@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Подписчики и рассылка{% endblock %}
+{% block content %}
+<header class="page">
+  <div>
+    <h1>Подписчики и рассылка</h1>
+    <p class="sub">Подписка через /start без подтверждения · владелец (TELEGRAM_CHAT_ID) получает рассылку всегда</p>
+  </div>
+  {% if bot is none %}<span class="pill idle">бот не настроен</span>
+  {% elif bot %}<span class="pill ok">бот работает</span>
+  {% else %}<span class="pill warn">бот остановлен</span>{% endif %}
+</header>
+
+<div class="split">
+  <section class="card grow" aria-labelledby="subs-h">
+    <div class="card-head"><h2 id="subs-h">Подписчики</h2><span class="small muted">активных <b class="mono">{{ page.active }}</b> · всего <b class="mono">{{ page.rows | length }}</b></span></div>
+    <table>
+      <thead><tr><th>Чат</th><th>Тип</th><th>Статус</th><th>С</th><th class="num">Получено</th></tr></thead>
+      <tbody>
+      {% for r in page.rows %}
+        <tr>
+          <td><div style="font-weight: 500;">{{ r.title or '—' }}</div><div class="mono small muted">{{ r.chat_id }}</div></td>
+          <td>{{ r.chat_type or '—' }}</td>
+          <td>
+            {% if r.is_active %}<span class="pill ok">активен</span>
+            {% elif r.unsubscribe_reason == 'blocked' %}<span class="pill warn">заблокировал</span>
+            {% else %}<span class="pill idle">отписался</span>{% endif %}
+          </td>
+          <td class="mono">{{ r.subscribed_at | dt }}</td>
+          <td class="num">{{ page.received.get(r.chat_id | string, 0) }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="empty">Пока никто не подписался. Отправьте боту /start.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% if page.events %}
+    <div style="display: flex; flex-direction: column; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line-2);">
+      <h3>События</h3>
+      {% for e in page.events %}<div style="display: flex; gap: 12px; font-size: 13px;"><span class="mono muted">{{ e.at | dt }}</span><span>{{ e.title }} {{ e.what }}</span></div>{% endfor %}
+    </div>
+    {% endif %}
+  </section>
+
+  <aside class="card" aria-labelledby="rules-h" style="width: 420px;">
+    <div class="card-head"><h2 id="rules-h">Правила рассылки</h2><span class="pill warn">этап 4</span></div>
+    <p class="small muted" style="margin: 0; line-height: 1.5;">Рассылки пока нет. Ниже видно, сколько размеченных за 24 часа новостей прошло бы при разных порогах importance главного актива: это поможет выбрать порог.</p>
+    <table>
+      <thead><tr><th>Порог</th><th class="num">Прошло бы</th><th style="width: 45%;"></th></tr></thead>
+      <tbody>
+      {% for t in page.threshold_preview %}
+        <tr>
+          <td class="mono">≥ {{ t.min }}</td>
+          <td class="num">{{ t.n }} из {{ page.preview_total }}</td>
+          <td style="vertical-align: middle;"><div class="bar"><div style="width: {{ (100 * t.n / page.preview_total) if page.preview_total else 0 }}%;"></div></div></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </aside>
+</div>
+{% endblock %}

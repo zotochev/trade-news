@@ -11,6 +11,7 @@ annotate            run the LLM annotation job once
 review              print a random sample of annotations for manual checking
 query ...           the spec's target queries (section 3)
 cleanup             delete data older than the retention settings
+admin               the admin web page alone (127.0.0.1:ADMIN_PORT); `run` starts it too
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from __future__ import annotations
 import argparse
 import os
 import signal
+import threading
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -27,6 +29,7 @@ import structlog
 from dotenv import load_dotenv
 
 from trade_news import llm, queries, retention
+from trade_news.admin import app as admin_app
 from trade_news.annotation import assets as asset_ref
 from trade_news.annotation.run import annotate_pending
 from trade_news.collectors import discover
@@ -140,6 +143,7 @@ def cmd_run(cfg: Config) -> None:
         seed_assets(engine, client, sec=_no_equities(engine))
     except Exception:
         log.exception("assets_seed_failed")  # annotation still works, resolution is weaker
+    llm_client = None
     if (missing := llm.missing_secret(cfg.llm)) is None:
         llm_client = llm.make_client(cfg.llm, engine, client, utcnow)
         scheduler.add_job(
@@ -165,13 +169,21 @@ def cmd_run(cfg: Config) -> None:
         coalesce=True,
     )
 
-    bot_stop = start_bot(engine, client, [(s.name, s.description) for s in specs])
+    source_list = [(s.name, s.description) for s in specs]
+    bot_thread, bot_stop = start_bot(engine, client, source_list) or (None, None)
+    admin_server = admin_app.start_in_thread(
+        admin_app.create_app(
+            admin_deps(engine, cfg, source_list, llm_client, scheduler, bot_thread)
+        ),
+        admin_port(),
+    )
 
     def stop(signum, _frame):
         # systemctl stop sends SIGTERM: let running collectors finish their transaction
         log.info("scheduler_stopping", signal=signal.Signals(signum).name)
         if bot_stop is not None:
             bot_stop.set()
+        admin_server.should_exit = True
         scheduler.shutdown(wait=True)
 
     signal.signal(signal.SIGTERM, stop)
@@ -324,16 +336,70 @@ def root_chat_id() -> int | None:
     return int(value) if value else None
 
 
+def admin_port() -> int:
+    return int(os.environ.get("ADMIN_PORT") or 10000)
+
+
+def admin_deps(engine, cfg: Config, sources, llm_client, scheduler=None, bot_thread=None):
+    """Wires the admin page's buttons to the running jobs."""
+
+    def annotate_now() -> None:
+        if scheduler is not None and scheduler.get_job("annotate"):
+            scheduler.modify_job("annotate", next_run_time=utcnow())
+        else:
+            threading.Thread(
+                target=run_annotate, args=(engine, llm_client, cfg), daemon=True
+            ).start()
+
+    def reannotate(item_id: int) -> None:
+        def job():
+            try:
+                annotate_pending(engine, llm_client, cfg.llm, utcnow(), only_ids=[item_id])
+            except Exception:
+                log.exception("reannotate_failed", item_id=item_id)
+
+        threading.Thread(target=job, daemon=True).start()
+
+    return admin_app.AdminDeps(
+        engine=engine,
+        cfg=cfg,
+        sources=sources,
+        now=utcnow,
+        annotate_now=annotate_now if llm_client is not None else None,
+        reannotate=reannotate if llm_client is not None else None,
+        bot_running=(bot_thread.is_alive if bot_thread is not None else None),
+    )
+
+
+def cmd_admin(cfg: Config) -> None:
+    """The admin page alone (no collectors, no bot): handy for local development."""
+    import uvicorn
+
+    engine = make_engine(cfg.database_url)
+    registry = discover()
+    sources = [
+        (n, registry[n].description) for n, s in cfg.sources.items() if s.enabled and n in registry
+    ]
+    with httpx.Client(follow_redirects=True) as client:
+        llm_client = (
+            None
+            if llm.missing_secret(cfg.llm)
+            else llm.make_client(cfg.llm, engine, client, utcnow)
+        )
+        app = admin_app.create_app(admin_deps(engine, cfg, sources, llm_client))
+        log.info("admin_started", url=f"http://127.0.0.1:{admin_port()}")
+        uvicorn.run(app, host="127.0.0.1", port=admin_port(), log_level="warning")
+
+
 def start_bot(engine: sa.Engine, client: httpx.Client, sources: list[tuple[str, str]]):
-    """Starts the subscription bot thread if a token is configured. Returns its stop event."""
+    """Starts the subscription bot thread if a token is configured. Returns (thread, stop event)."""
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
     if not token:
         log.warning("telegram_bot_disabled", reason="TELEGRAM_BOT_TOKEN is not set")
         return None
-    _, stop_event = bot.start_in_thread(
+    return bot.start_in_thread(
         engine, make_api(client, token), root_chat_id=root_chat_id(), now=utcnow, sources=sources
     )
-    return stop_event
 
 
 def cmd_subscribers(cfg: Config) -> None:
@@ -446,6 +512,7 @@ def main(argv: list[str] | None = None) -> None:
     r = sub.add_parser("review")
     r.add_argument("-n", type=int, default=20)
     sub.add_parser("cleanup")
+    sub.add_parser("admin")
     q = sub.add_parser("query")
     q.add_argument("name", choices=["asset-news", "class-day", "upcoming", "scheduled"])
     q.add_argument("target", nargs="?", help="symbol (AAPL, EURUSD) or asset class (fx)")
@@ -477,6 +544,8 @@ def main(argv: list[str] | None = None) -> None:
             cmd_review(cfg, args.n)
         case "cleanup":
             cmd_cleanup(cfg)
+        case "admin":
+            cmd_admin(cfg)
         case "query":
             cmd_query(cfg, args)
 

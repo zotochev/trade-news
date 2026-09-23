@@ -19,7 +19,7 @@
       и разметки, подписчики, очередь нераспознанных активов).
       Дизайн: https://claude.ai/artifact/LJRkM2NcbRDKn8AgjF88EH
       Приложение слушает 127.0.0.1:ADMIN_PORT, наружу через nginx + HTTPS.
-      Решить: авторизация в nginx (auth_basic) или в самом приложении; пример конфига nginx в README
+      Авторизация: nginx auth_basic (решено), конфиг: deploy/nginx-admin.conf
 - [ ] Этап 2: остальные источники (Marketaux, CryptoPanic, cryptocurrency.cv, экономический
       календарь, RSS ЦБ, FRED, CME FedWatch)
 - [ ] Этап 5: сбор цен и отчёт по валидации разметки

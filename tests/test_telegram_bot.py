@@ -200,3 +200,54 @@ def test_poll_loop_survives_errors_and_stops(engine):
     stop.wait = lambda _t: None  # no real sleeping between retries
     bot.poll_forever(engine, api, root_chat_id=None, stop=stop, now=lambda: NOW)
     assert active(engine) == [222]
+
+
+def test_sources_command_shows_status(engine, handle, monkeypatch):
+    from datetime import timedelta
+
+    from trade_news.db.schema import collector_runs
+
+    with engine.begin() as conn:
+        conn.execute(
+            collector_runs.insert(),
+            [
+                {
+                    "source": "sec_edgar",
+                    "started_at": NOW - timedelta(hours=30),
+                    "status": "ok",
+                    "inserted": 500,
+                },
+                {
+                    "source": "sec_edgar",
+                    "started_at": NOW - timedelta(minutes=5),
+                    "status": "ok",
+                    "inserted": 7,
+                },
+                {
+                    "source": "finnhub",
+                    "started_at": NOW - timedelta(hours=2),
+                    "status": "error",
+                    "inserted": 0,
+                },
+            ],
+        )
+    sources = [("sec_edgar", "SEC EDGAR <filings>"), ("finnhub", "Finnhub"), ("new_src", "")]
+    bot.handle_update(
+        engine,
+        handle.api,
+        message("/sources"),
+        root_chat_id=ROOT,
+        bot_username="b",
+        now=lambda: NOW,
+        sources=sources,
+    )
+    (text,) = handle.api.to(222)
+    assert "Источники (3)" in text
+    assert "✅ SEC EDGAR &lt;filings&gt;" in text  # escaped for HTML parse mode
+    assert "5 мин назад" in text and "за 24 ч: 7" in text  # the 30h-old run is outside 24h
+    assert "⚠️ Finnhub" in text and "2 ч назад, ошибка" in text
+    assert "⏳ new_src" in text and "ещё не запускался" in text
+
+
+def test_sources_without_collectors():
+    assert bot.format_sources([], NOW) == "Сейчас не подключено ни одного источника."

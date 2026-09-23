@@ -71,6 +71,7 @@ uv run trade-news stats --hours 24
 | `/start` | подписывает чат сразу, без подтверждения; работает в личке и в группе (`/start@bot`) |
 | `/stop` | отписывает |
 | `/help` | описание бота и статус подписки |
+| `/sources` | какие источники слушает бот: последний сбор, ошибка ли, сколько новых записей за 24 ч |
 
 - **Каналы.** В канале нельзя отправить `/start`, поэтому канал подписывается, когда бота
   добавляют в него администратором.
@@ -144,7 +145,7 @@ JSON на PostgreSQL становится JSONB, bigint-ключи на SQLite �
    from trade_news.collectors.base import Batch, Context, RawItem, collector
 
 
-   @collector("my_source", secrets=("MY_API_KEY",))
+   @collector("my_source", secrets=("MY_API_KEY",), description="Example: news about X")
    def fetch(ctx: Context, cursor: dict | None) -> Batch:
        resp = ctx.get(
            "https://api.example.com/news",
@@ -165,7 +166,7 @@ JSON на PostgreSQL становится JSONB, bigint-ключи на SQLite �
        return Batch(items, cursor={"since": ...})
    ```
 
-   `ctx.get` уже учитывает лимит и делает ретраи. `ctx.params` берётся из `config.yaml`,
+   `description` показывается в команде бота `/sources`. `ctx.get` уже учитывает лимит и делает ретраи. `ctx.params` берётся из `config.yaml`,
    `ctx.secrets` содержит только объявленные переменные окружения. `published_at` должен быть tz-aware.
 2. Добавить секцию в `config.yaml` → `sources.my_source` (`interval_seconds`, `rate_limit`, `params`)
    и при необходимости лимит в `rate_limits`.

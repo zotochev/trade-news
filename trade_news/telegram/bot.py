@@ -3,6 +3,7 @@
 - /start subscribes the chat immediately (private chat or group), no approval step;
 - /stop unsubscribes;
 - /help shows what the bot does and the chat's subscription status;
+- /sources lists the sources this process collects from, with their last run and 24h volume;
 - the bot being blocked / kicked (my_chat_member → kicked|left) unsubscribes the chat;
 - a channel subscribes by adding the bot as an administrator (channels can't send /start).
 
@@ -15,13 +16,15 @@ so this bot needs its own token — not one shared with another polling app.
 
 from __future__ import annotations
 
+import html
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import datetime
 
 import sqlalchemy as sa
 import structlog
 
+from trade_news.status import SourceStatus, source_statuses
 from trade_news.telegram import subscribers as subs
 from trade_news.telegram.api import Api, TelegramError
 
@@ -30,6 +33,7 @@ log = structlog.get_logger()
 COMMANDS = [
     ("start", "Подписаться на рассылку"),
     ("stop", "Отписаться от рассылки"),
+    ("sources", "Какие источники слушает бот"),
     ("help", "Что это за бот и статус подписки"),
 ]
 ABOUT = (
@@ -54,6 +58,37 @@ def chat_title(chat: dict, user: dict | None = None) -> str:
     return name or str(chat["id"])
 
 
+STATUS_ICON = {"ok": "✅", "running": "🔄", "error": "⚠️", "aborted": "⚠️", None: "⏳"}
+
+
+def ago(then: datetime | None, now: datetime) -> str:
+    if then is None:
+        return "ещё не запускался"
+    minutes = int((now - then).total_seconds() // 60)
+    if minutes < 1:
+        return "только что"
+    if minutes < 60:
+        return f"{minutes} мин назад"
+    if minutes < 48 * 60:
+        return f"{minutes // 60} ч назад"
+    return f"{minutes // (24 * 60)} дн назад"
+
+
+def format_sources(statuses: Sequence[SourceStatus], now: datetime) -> str:
+    if not statuses:
+        return "Сейчас не подключено ни одного источника."
+    note = {"error": ", ошибка", "aborted": ", прерван", "running": ", идёт сбор"}
+    lines = [f"📡 <b>Источники ({len(statuses)})</b>"]
+    for st in statuses:
+        lines += [
+            "",
+            f"{STATUS_ICON.get(st.last_status, '❔')} {html.escape(st.description)}",
+            f"    последний сбор: {ago(st.last_started, now)}{note.get(st.last_status, '')}",
+            f"    новых записей за 24 ч: {st.new_24h}",
+        ]
+    return "\n".join(lines)
+
+
 def parse_command(text: str, bot_username: str | None) -> str | None:
     """'/start@my_bot arg' → 'start'. Commands addressed to another bot are ignored."""
     if not text.startswith("/"):
@@ -73,11 +108,17 @@ def handle_update(
     root_chat_id: int | None,
     bot_username: str | None,
     now: Callable[[], datetime],
+    sources: Sequence[tuple[str, str]] = (),
 ) -> None:
     if msg := update.get("message"):
         chat = msg["chat"]
         cmd = parse_command(msg.get("text") or "", bot_username)
-        if cmd in ("start", "stop", "help"):
+        if cmd == "sources":
+            ts = now()
+            with engine.connect() as conn:
+                statuses = source_statuses(conn, sources, ts)
+            _reply(api, chat["id"], format_sources(statuses, ts), html=True)
+        elif cmd in ("start", "stop", "help"):
             _handle_command(engine, api, cmd, chat, msg.get("from"), root_chat_id, now())
     elif member := update.get("my_chat_member"):
         _handle_membership(engine, api, member, root_chat_id, now())
@@ -165,6 +206,7 @@ def poll_forever(
     root_chat_id: int | None,
     stop: threading.Event,
     now: Callable[[], datetime],
+    sources: Sequence[tuple[str, str]] = (),
 ) -> None:
     """Long-polling loop. One bad update or a Telegram outage never ends it."""
     bot_username = None
@@ -202,13 +244,16 @@ def poll_forever(
                     root_chat_id=root_chat_id,
                     bot_username=bot_username,
                     now=now,
+                    sources=sources,
                 )
             except Exception:
                 log.exception("telegram_update_failed", update_id=update.get("update_id"))
     log.info("telegram_bot_stopped")
 
 
-def start_in_thread(engine, api, *, root_chat_id, now) -> tuple[threading.Thread, threading.Event]:
+def start_in_thread(
+    engine, api, *, root_chat_id, now, sources=()
+) -> tuple[threading.Thread, threading.Event]:
     stop = threading.Event()
     thread = threading.Thread(
         target=poll_forever,
@@ -218,6 +263,7 @@ def start_in_thread(engine, api, *, root_chat_id, now) -> tuple[threading.Thread
             "root_chat_id": root_chat_id,
             "stop": stop,
             "now": now,
+            "sources": sources,
         },
         name="telegram-bot",
         daemon=True,  # an in-flight long poll must not block process exit

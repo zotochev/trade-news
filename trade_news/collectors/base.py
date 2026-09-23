@@ -2,7 +2,7 @@
 
 A collector is a plain function registered with @collector:
 
-    @collector("my_source", secrets=("MY_API_KEY",))
+    @collector("my_source", secrets=("MY_API_KEY",), description="Example: news about X")
     def fetch(ctx: Context, cursor: dict | None) -> Batch:
         resp = ctx.get("https://api.example.com/news", params={"since": ...})
         return Batch(items=[RawItem(...)], cursor={...})
@@ -59,6 +59,7 @@ class CollectorSpec:
     name: str
     fetch: FetchFn
     secrets: tuple[str, ...] = ()
+    description: str = ""  # human-readable, shown by the bot's /sources
     # Title-based dedup makes sense for news. Primary data (e.g. filings) has templated titles
     # and unique ids, so it is deduplicated by URL/id only.
     title_dedup: bool = True
@@ -71,12 +72,13 @@ def collector(
     name: str,
     *,
     secrets: tuple[str, ...] = (),
+    description: str = "",
     title_dedup: bool = True,
 ) -> Callable[[FetchFn], FetchFn]:
     def register(fn: FetchFn) -> FetchFn:
         if name in REGISTRY:
             raise ValueError(f"collector {name!r} registered twice")
-        REGISTRY[name] = CollectorSpec(name, fn, secrets, title_dedup)
+        REGISTRY[name] = CollectorSpec(name, fn, secrets, description, title_dedup)
         return fn
 
     return register

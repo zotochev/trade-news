@@ -116,7 +116,7 @@ def cmd_run(cfg: Config) -> None:
             misfire_grace_time=60,
         )
 
-    bot_stop = start_bot(engine, client)
+    bot_stop = start_bot(engine, client, [(s.name, s.description) for s in specs])
 
     def stop(signum, _frame):
         # systemctl stop sends SIGTERM: let running collectors finish their transaction
@@ -140,14 +140,14 @@ def root_chat_id() -> int | None:
     return int(value) if value else None
 
 
-def start_bot(engine: sa.Engine, client: httpx.Client):
+def start_bot(engine: sa.Engine, client: httpx.Client, sources: list[tuple[str, str]]):
     """Starts the subscription bot thread if a token is configured. Returns its stop event."""
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
     if not token:
         log.warning("telegram_bot_disabled", reason="TELEGRAM_BOT_TOKEN is not set")
         return None
     _, stop_event = bot.start_in_thread(
-        engine, make_api(client, token), root_chat_id=root_chat_id(), now=utcnow
+        engine, make_api(client, token), root_chat_id=root_chat_id(), now=utcnow, sources=sources
     )
     return stop_event
 

@@ -37,7 +37,11 @@ def _get(ctx: Context, path: str, **params) -> list[dict]:
     return data
 
 
-@collector("finnhub_market_news", secrets=("FINNHUB_API_KEY",))
+@collector(
+    "finnhub_market_news",
+    secrets=("FINNHUB_API_KEY",),
+    description="Finnhub: общие рыночные новости и M&A",
+)
 def fetch_market_news(ctx: Context, cursor: dict | None) -> Batch:
     """General market news; `minId` makes each call incremental per category."""
     cursor = dict(cursor or {})
@@ -51,7 +55,11 @@ def fetch_market_news(ctx: Context, cursor: dict | None) -> Batch:
     return Batch(items=items, cursor=cursor)
 
 
-@collector("finnhub_company_news", secrets=("FINNHUB_API_KEY",))
+@collector(
+    "finnhub_company_news",
+    secrets=("FINNHUB_API_KEY",),
+    description="Finnhub: новости по тикерам из списка наблюдения",
+)
 def fetch_company_news(ctx: Context, cursor: dict | None) -> Batch:
     """News per ticker from the watchlist. No server-side cursor: re-reads the last N days,
     already-stored ids are skipped by the raw store's unique key."""

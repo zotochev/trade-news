@@ -85,7 +85,12 @@ def to_raw_items(entries: list[dict]) -> list[RawItem]:
     ]
 
 
-@collector("sec_edgar", secrets=("SEC_USER_AGENT",), title_dedup=False)
+@collector(
+    "sec_edgar",
+    secrets=("SEC_USER_AGENT",),
+    description="SEC EDGAR: подачи 8-K, 10-Q, 10-K и Form 4 (инсайдеры)",
+    title_dedup=False,
+)
 def fetch(ctx: Context, cursor: dict | None) -> Batch:
     cursor = dict(cursor or {})
     headers = {"User-Agent": ctx.secrets["SEC_USER_AGENT"], "Accept-Encoding": "gzip, deflate"}

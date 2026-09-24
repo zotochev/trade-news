@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 # Bump when the prompt or schema changes: annotations are unique per (item, prompt_version),
 # so a new version re-annotates items and old results stay for comparison.
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 
 AssetClass = Literal["equity", "fx", "crypto", "commodity", "index", "rates", "macro"]
 Scope = Literal["market_wide", "group", "specific"]
@@ -152,7 +152,14 @@ different scope:
 - is_primary: true only for the main subject(s).
 Example: a Fed decision → (rates, market_wide) + (fx, specific, EUR/USD) +
 (equity, market_wide) + (crypto, market_wide).
-Routine filings (e.g. an ordinary insider Form 4, trust/ABS 8-Ks) get importance 1-2.
+Routine filings (trust/ABS 8-Ks, administrative notices) get importance 1-2.
+Insider trades (SEC Form 4; the body has the parsed facts: role, shares, price, total, 10b5-1
+plan flag). The reader trades short-term, so open-market insider buying is a real signal:
+- purchase by CEO/CFO/Chair/President, or any purchase >= $1M: importance 4, bullish;
+  5 if exceptionally large for the company or several insiders buy;
+- smaller purchase by a director/officer: 3, bullish;
+- sale NOT under a 10b5-1 plan: >= $5M or by CEO/CFO: 3, bearish; otherwise 2, bearish;
+- sale under a 10b5-1 plan: 1-2, neutral. event_type for all of these: "insider".
 
 relevance: when the news applies.
 - immediate: it already happened (date_iso null).

@@ -16,6 +16,7 @@ from datetime import UTC, date, datetime, time, timedelta
 import sqlalchemy as sa
 
 from trade_news.db.schema import assets, item_assets, item_relevance, items
+from trade_news.views import latest_annotation_ids
 
 _COLS = (
     items.c.id,
@@ -36,8 +37,20 @@ def _base():
     return (
         sa.select(*_COLS, assets.c.symbol)
         .select_from(items)
-        .join(item_assets, item_assets.c.item_id == items.c.id)
-        .join(item_relevance, item_relevance.c.item_id == items.c.id)
+        .join(
+            item_assets,
+            sa.and_(
+                item_assets.c.item_id == items.c.id,
+                item_assets.c.annotation_id.in_(latest_annotation_ids()),
+            ),
+        )
+        .join(
+            item_relevance,
+            sa.and_(
+                item_relevance.c.item_id == items.c.id,
+                item_relevance.c.annotation_id.in_(latest_annotation_ids()),
+            ),
+        )
         .outerjoin(assets, assets.c.id == item_assets.c.asset_id)
     )
 

@@ -96,7 +96,9 @@ def _upsert_item(
         "canonical_url": normalize_url(it.url),
         "title": it.title,
         "title_norm": title_norm,
-        "title_hash": sha256(title_norm) if spec.title_dedup and title_norm else None,
+        "title_hash": sha256(title_norm)
+        if (spec.title_dedup or it.raw.get("dedup_title") == "exact") and title_norm
+        else None,
         "body": it.body,
     }
     existing = conn.execute(
@@ -109,13 +111,15 @@ def _upsert_item(
         return False
 
     published_at = it.published_at or fetched_at
+    exact_title_only = it.raw.get("dedup_title") == "exact"
     match = find_duplicate(
         conn,
         canonical_url=values["canonical_url"],
         title_norm=title_norm,
         published_at=published_at,
-        use_title=spec.title_dedup,
+        use_title=spec.title_dedup or exact_title_only,
         cfg=cfg.dedup,
+        fuzzy=not exact_title_only,
     )
     item_id = conn.execute(
         items.insert()

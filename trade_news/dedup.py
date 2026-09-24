@@ -78,6 +78,7 @@ def find_duplicate(
     use_title: bool,
     cfg: DedupConfig,
     exclude_id: int | None = None,
+    fuzzy: bool = True,
 ) -> Match | None:
     window = timedelta(hours=cfg.window_hours)
     base = sa.select(items.c.id, items.c.dedup_group_id, items.c.title_norm).where(
@@ -96,6 +97,8 @@ def find_duplicate(
         return None
     if m := first(base.where(items.c.title_hash == sha256(title_norm)), "title_hash"):
         return m
+    if not fuzzy:
+        return None
 
     # Only compare against sources that also allow title dedup: templated titles of primary
     # data (e.g. "8-K - Apple Inc. (...)") must not absorb news items.

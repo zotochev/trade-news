@@ -38,14 +38,9 @@ EVENT_TYPES = [
     "insider", "other",
 ]  # fmt: skip
 MATERIAL_EVENTS = [
-    "earnings",
-    "guidance",
-    "m_and_a",
-    "regulatory",
-    "macro",
-    "rate_decision",
-    "cb_speech",
-]
+    "earnings", "guidance", "m_and_a", "regulatory", "macro", "rate_decision", "cb_speech",
+    "insider",
+]  # fmt: skip
 MAX_ATTEMPTS = 5
 
 

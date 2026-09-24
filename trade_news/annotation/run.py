@@ -100,6 +100,8 @@ def pending_items(
     for row in conn.execute(q):
         if any(src == row.source and rx.search(row.title or "") for src, rx in regexes):
             continue
+        if not only_ids and (row.raw_json or {}).get("llm_skip"):
+            continue  # the source already decided it's noise (e.g. a small Form 4)
         out.append(
             ItemForAnnotation(
                 id=row.id,
@@ -118,7 +120,7 @@ def pending_items(
 def _hints(conn: sa.Connection, source: str, raw: dict) -> str | None:
     """Facts the source already knows, so the LLM doesn't have to guess the instrument."""
     if source == "sec_edgar" and raw.get("cik"):
-        ticker = asset_ref.equity_by_cik(conn, raw["cik"])
+        ticker = (raw.get("form4") or {}).get("ticker") or asset_ref.equity_by_cik(conn, raw["cik"])
         form = raw.get("form")
         return f"SEC form {form}; issuer ticker: {ticker or 'unknown'}"
     if raw.get("related"):

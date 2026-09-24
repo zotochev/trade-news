@@ -31,6 +31,12 @@ sources:
     params:
       forms: ["8-K", "10-Q", "10-K", "4"]
       max_pages: 5       # 100 entries per page; stops early when it reaches known filings
+      form4_details: true              # fetch each new Form 4 and parse the trades (1 request each)
+      form4_max_details_per_run: 150
+      form4_thresholds:                # only these go to the LLM; the rest is stored, not annotated
+        min_buy_usd: 100000            # open-market purchase (code P)
+        min_sell_usd: 1000000          # open-market sale (code S)
+        skip_planned_sales: true       # sales under a Rule 10b5-1 plan carry no signal
 
   finnhub_market_news:
     interval_seconds: 300
@@ -55,9 +61,7 @@ llm:
   max_item_age_hours: 6    # older items (e.g. the first-run backlog) are never annotated
   body_max_chars: 1500
   quota_reset_hour_utc: 8  # Gemini daily quota resets at midnight Pacific
-  exclude:                 # not worth a request: stored, but never sent to the LLM
-    - source: sec_edgar
-      title_regex: "^4(/A)? - "   # Form 4 insider filings: hundreds a day
+  exclude: []             # e.g. {source: x, title_regex: "..."}: stored, never sent to the LLM
   models:                  # prices: paid tier USD per 1M tokens, for cost estimates only
     - name: gemini-3.5-flash-lite
       daily_request_limit: 300

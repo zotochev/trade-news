@@ -1,0 +1,257 @@
+<SEC-DOCUMENT>0000929638-26-003625.txt : 20260923
+<SEC-HEADER>0000929638-26-003625.hdr.sgml : 20260923
+<ACCEPTANCE-DATETIME>20260923213017
+ACCESSION NUMBER:		0000929638-26-003625
+CONFORMED SUBMISSION TYPE:	4
+PUBLIC DOCUMENT COUNT:		1
+CONFORMED PERIOD OF REPORT:	20260921
+FILED AS OF DATE:		20260923
+DATE AS OF CHANGE:		20260923
+
+REPORTING-OWNER:	
+
+	OWNER DATA:	
+		COMPANY CONFORMED NAME:			Bliss Andrew
+		CENTRAL INDEX KEY:			0001974191
+		ORGANIZATION NAME:           	
+
+	FILING VALUES:
+		FORM TYPE:		4
+		SEC ACT:		1934 Act
+		SEC FILE NUMBER:	001-42797
+		FILM NUMBER:		261402010
+
+	MAIL ADDRESS:	
+		STREET 1:		SUITE 4290, 48 MARKET STREET
+		STREET 2:		CAMANA BAY
+		CITY:			GRAND CAYMAN
+		STATE:			E9
+		ZIP:			KY1-9006
+
+ISSUER:		
+
+	COMPANY DATA:	
+		COMPANY CONFORMED NAME:			Bullish
+		CENTRAL INDEX KEY:			0001872195
+		STANDARD INDUSTRIAL CLASSIFICATION:	FINANCE SERVICES [6199]
+		ORGANIZATION NAME:           	09 Crypto Assets
+		EIN:				000000000
+		STATE OF INCORPORATION:			E9
+		FISCAL YEAR END:			1231
+
+	BUSINESS ADDRESS:	
+		ADDRESS IS A NON US LOCATION: 	YES
+		STREET 1:		C/O MAPLES CORPORATE SERVICES LIMITED
+		STREET 2:		P.O. BOX 309, UGLAND HOUSE
+		CITY:			GEORGE TOWN
+		PROVINCE COUNTRY:   	E9
+		ZIP:			KY1-1104
+		BUSINESS PHONE:		852-3761-9140
+
+	MAIL ADDRESS:	
+		ADDRESS IS A NON US LOCATION: 	YES
+		STREET 1:		C/O MAPLES CORPORATE SERVICES LIMITED
+		STREET 2:		P.O. BOX 309, UGLAND HOUSE
+		CITY:			GEORGE TOWN
+		PROVINCE COUNTRY:   	E9
+		ZIP:			KY1-1104
+</SEC-HEADER>
+<DOCUMENT>
+<TYPE>4
+<SEQUENCE>1
+<FILENAME>form4.xml
+<TEXT>
+<XML>
+<?xml version="1.0"?>
+<ownershipDocument>
+
+    <schemaVersion>X0609</schemaVersion>
+
+    <documentType>4</documentType>
+
+    <periodOfReport>2026-09-21</periodOfReport>
+
+    <issuer>
+        <issuerCik>0001872195</issuerCik>
+        <issuerName>Bullish</issuerName>
+        <issuerTradingSymbol>BLSH</issuerTradingSymbol>
+        <issuerForeignTradingSymbol></issuerForeignTradingSymbol>
+    </issuer>
+
+    <reportingOwner>
+        <reportingOwnerId>
+            <rptOwnerCik>0001974191</rptOwnerCik>
+            <rptOwnerName>Bliss Andrew</rptOwnerName>
+        </reportingOwnerId>
+        <reportingOwnerAddress>
+            <rptOwnerNonUSAddressFlag>true</rptOwnerNonUSAddressFlag>
+            <rptOwnerStreet1>BULLISH, UNIT B1, THE GROVE TOO</rptOwnerStreet1>
+            <rptOwnerStreet2>ESTERLEY TIBBETTS HIGHWAY</rptOwnerStreet2>
+            <rptOwnerCity>GRAND CAYMAN</rptOwnerCity>
+            <rptOwnerNonUSStateTerritory></rptOwnerNonUSStateTerritory>
+            <rptOwnerCountry>E9</rptOwnerCountry>
+            <rptOwnerZipCode>KY1-9006</rptOwnerZipCode>
+            <rptOwnerStateDescription>CAYMAN ISLANDS</rptOwnerStateDescription>
+        </reportingOwnerAddress>
+        <reportingOwnerRelationship>
+            <isDirector>true</isDirector>
+        </reportingOwnerRelationship>
+    </reportingOwner>
+
+    <aff10b5One>true</aff10b5One>
+
+    <nonDerivativeTable>
+        <nonDerivativeTransaction>
+            <securityTitle>
+                <value>Ordinary Shares</value>
+            </securityTitle>
+            <transactionDate>
+                <value>2026-09-21</value>
+            </transactionDate>
+            <transactionCoding>
+                <transactionFormType>4</transactionFormType>
+                <transactionCode>S</transactionCode>
+                <equitySwapInvolved>0</equitySwapInvolved>
+            </transactionCoding>
+            <transactionAmounts>
+                <transactionShares>
+                    <value>76953</value>
+                </transactionShares>
+                <transactionPricePerShare>
+                    <value>40.2049</value>
+                    <footnoteId id="F1"/>
+                </transactionPricePerShare>
+                <transactionAcquiredDisposedCode>
+                    <value>D</value>
+                </transactionAcquiredDisposedCode>
+            </transactionAmounts>
+            <postTransactionAmounts>
+                <sharesOwnedFollowingTransaction>
+                    <value>4963049</value>
+                </sharesOwnedFollowingTransaction>
+            </postTransactionAmounts>
+            <ownershipNature>
+                <directOrIndirectOwnership>
+                    <value>I</value>
+                </directOrIndirectOwnership>
+                <natureOfOwnership>
+                    <value>By Bliss Capital Limited</value>
+                    <footnoteId id="F5"/>
+                </natureOfOwnership>
+            </ownershipNature>
+        </nonDerivativeTransaction>
+        <nonDerivativeTransaction>
+            <securityTitle>
+                <value>Ordinary Shares</value>
+            </securityTitle>
+            <transactionDate>
+                <value>2026-09-22</value>
+            </transactionDate>
+            <transactionCoding>
+                <transactionFormType>4</transactionFormType>
+                <transactionCode>S</transactionCode>
+                <equitySwapInvolved>0</equitySwapInvolved>
+            </transactionCoding>
+            <transactionAmounts>
+                <transactionShares>
+                    <value>108200</value>
+                </transactionShares>
+                <transactionPricePerShare>
+                    <value>40.7861</value>
+                    <footnoteId id="F2"/>
+                </transactionPricePerShare>
+                <transactionAcquiredDisposedCode>
+                    <value>D</value>
+                </transactionAcquiredDisposedCode>
+            </transactionAmounts>
+            <postTransactionAmounts>
+                <sharesOwnedFollowingTransaction>
+                    <value>4854849</value>
+                </sharesOwnedFollowingTransaction>
+            </postTransactionAmounts>
+            <ownershipNature>
+                <directOrIndirectOwnership>
+                    <value>I</value>
+                </directOrIndirectOwnership>
+                <natureOfOwnership>
+                    <value>By Bliss Capital Limited</value>
+                    <footnoteId id="F5"/>
+                </natureOfOwnership>
+            </ownershipNature>
+        </nonDerivativeTransaction>
+        <nonDerivativeTransaction>
+            <securityTitle>
+                <value>Ordinary Shares</value>
+            </securityTitle>
+            <transactionDate>
+                <value>2026-09-23</value>
+            </transactionDate>
+            <transactionCoding>
+                <transactionFormType>4</transactionFormType>
+                <transactionCode>S</transactionCode>
+                <equitySwapInvolved>0</equitySwapInvolved>
+            </transactionCoding>
+            <transactionAmounts>
+                <transactionShares>
+                    <value>59976</value>
+                </transactionShares>
+                <transactionPricePerShare>
+                    <value>40.2166</value>
+                    <footnoteId id="F3"/>
+                </transactionPricePerShare>
+                <transactionAcquiredDisposedCode>
+                    <value>D</value>
+                </transactionAcquiredDisposedCode>
+            </transactionAmounts>
+            <postTransactionAmounts>
+                <sharesOwnedFollowingTransaction>
+                    <value>4794873</value>
+                </sharesOwnedFollowingTransaction>
+            </postTransactionAmounts>
+            <ownershipNature>
+                <directOrIndirectOwnership>
+                    <value>I</value>
+                </directOrIndirectOwnership>
+                <natureOfOwnership>
+                    <value>By Bliss Capital Limited</value>
+                    <footnoteId id="F5"/>
+                </natureOfOwnership>
+            </ownershipNature>
+        </nonDerivativeTransaction>
+        <nonDerivativeHolding>
+            <securityTitle>
+                <value>Ordinary Shares</value>
+            </securityTitle>
+            <postTransactionAmounts>
+                <sharesOwnedFollowingTransaction>
+                    <value>10016</value>
+                    <footnoteId id="F4"/>
+                </sharesOwnedFollowingTransaction>
+            </postTransactionAmounts>
+            <ownershipNature>
+                <directOrIndirectOwnership>
+                    <value>D</value>
+                </directOrIndirectOwnership>
+            </ownershipNature>
+        </nonDerivativeHolding>
+    </nonDerivativeTable>
+
+    <footnotes>
+        <footnote id="F1">Represents the weighted average price of shares sold in multiple transactions at prices that ranged from $40.00 to $40.58.</footnote>
+        <footnote id="F2">Represents the weighted average price of shares sold in multiple transactions at prices that ranged from $40.00 to $41.41.</footnote>
+        <footnote id="F3">Represents the weighted average price of shares sold in multiple transactions at prices that ranged from $40.00 to $40.97.</footnote>
+        <footnote id="F4">Includes 5,877 restricted share units (&quot;RSUs&quot;) granted to the Reporting Person pursuant to the Bullish 2025 Omnibus Incentive Plan. The RSUs vest in full on September 1, 2027. Each RSU represents a right to receive one ordinary share of Bullish upon vesting.</footnote>
+        <footnote id="F5">The reported securities are held indirectly through By Bliss Capital Limited, an entity controlled by the Reporting Person. The Reporting Person is deemed to beneficially own the shares held by Bliss Capital Limited.</footnote>
+    </footnotes>
+
+    <remarks>Due to the issuer's status as a foreign private issuer pursuant to Rule 3a12-3(b) under the Securities Exchange Act of 1934 (the &quot;Act&quot;), the Reporting Person's transactions in the issuer's equity securities are exempt from Sections 16(b) and 16(c) of the Act.</remarks>
+
+    <ownerSignature>
+        <signatureName>/s/ Andrew C. Bliss</signatureName>
+        <signatureDate>2026-09-23</signatureDate>
+    </ownerSignature>
+</ownershipDocument>
+</XML>
+</TEXT>
+</DOCUMENT>
+</SEC-DOCUMENT>

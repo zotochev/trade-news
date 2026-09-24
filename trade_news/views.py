@@ -6,15 +6,20 @@ from collections import defaultdict
 
 import sqlalchemy as sa
 
-from trade_news.annotation.contract import PROMPT_VERSION
 from trade_news.db.schema import annotations, assets, item_assets, item_relevance, items, raw_items
 
 SUMMARY = annotations.c.payload_json["summary"].as_string()
 EVENT_TYPE = annotations.c.payload_json["event_type"].as_string()
 
 
+def latest_annotation_ids():
+    """Newest annotation per item. After a prompt version bump an item can have several;
+    readers must use one of them, never mix their links."""
+    return sa.select(sa.func.max(annotations.c.id)).group_by(annotations.c.item_id)
+
+
 def current_annotation():
-    return annotations.c.prompt_version == PROMPT_VERSION
+    return annotations.c.id.in_(latest_annotation_ids())
 
 
 def links_by_item(conn, item_ids: list[int]) -> dict[int, list[dict]]:
@@ -23,7 +28,10 @@ def links_by_item(conn, item_ids: list[int]) -> dict[int, list[dict]]:
     rows = conn.execute(
         sa.select(item_assets, assets.c.symbol)
         .outerjoin(assets, assets.c.id == item_assets.c.asset_id)
-        .where(item_assets.c.item_id.in_(item_ids))
+        .where(
+            item_assets.c.item_id.in_(item_ids),
+            item_assets.c.annotation_id.in_(latest_annotation_ids()),
+        )
         .order_by(item_assets.c.is_primary.desc(), item_assets.c.importance.desc())
     ).mappings()
     out: dict[int, list[dict]] = defaultdict(list)
@@ -40,7 +48,12 @@ def links_by_item(conn, item_ids: list[int]) -> dict[int, list[dict]]:
 def relevance_by_item(conn, item_ids: list[int]) -> dict[int, dict]:
     if not item_ids:
         return {}
-    rows = conn.execute(sa.select(item_relevance).where(item_relevance.c.item_id.in_(item_ids)))
+    rows = conn.execute(
+        sa.select(item_relevance).where(
+            item_relevance.c.item_id.in_(item_ids),
+            item_relevance.c.annotation_id.in_(latest_annotation_ids()),
+        )
+    )
     return {r.item_id: dict(r._mapping) for r in rows}
 
 

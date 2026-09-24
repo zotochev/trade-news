@@ -1,0 +1,153 @@
+<SEC-DOCUMENT>0001437749-26-031099.txt : 20260923
+<SEC-HEADER>0001437749-26-031099.hdr.sgml : 20260923
+<ACCEPTANCE-DATETIME>20260923214800
+ACCESSION NUMBER:		0001437749-26-031099
+CONFORMED SUBMISSION TYPE:	4
+PUBLIC DOCUMENT COUNT:		1
+CONFORMED PERIOD OF REPORT:	20260918
+FILED AS OF DATE:		20260923
+DATE AS OF CHANGE:		20260923
+
+REPORTING-OWNER:	
+
+	OWNER DATA:	
+		COMPANY CONFORMED NAME:			FONG GIFFORD
+		CENTRAL INDEX KEY:			0001018124
+		ORGANIZATION NAME:           	
+
+	FILING VALUES:
+		FORM TYPE:		4
+		SEC ACT:		1934 Act
+		SEC FILE NUMBER:	000-07406
+		FILM NUMBER:		261402036
+
+	MAIL ADDRESS:	
+		STREET 1:		3658 MT DIABLO BLVD, 200
+		CITY:			LAFAYETTE
+		STATE:			CA
+		ZIP:			94549
+
+ISSUER:		
+
+	COMPANY DATA:	
+		COMPANY CONFORMED NAME:			PRIMEENERGY RESOURCES CORP
+		CENTRAL INDEX KEY:			0000056868
+		STANDARD INDUSTRIAL CLASSIFICATION:	CRUDE PETROLEUM & NATURAL GAS [1311]
+		ORGANIZATION NAME:           	01 Energy & Transportation
+		EIN:				840637348
+		STATE OF INCORPORATION:			DE
+		FISCAL YEAR END:			1231
+
+	BUSINESS ADDRESS:	
+		STREET 1:		9821 KATY FREEWAY
+		STREET 2:		SUITE 1050
+		CITY:			HOUSTON
+		STATE:			TX
+		ZIP:			77024
+		BUSINESS PHONE:		2033585700
+
+	MAIL ADDRESS:	
+		STREET 1:		9821 KATY FREEWAY
+		STREET 2:		SUITE 1050
+		CITY:			HOUSTON
+		STATE:			TX
+		ZIP:			77024
+
+	FORMER COMPANY:	
+		FORMER CONFORMED NAME:	PRIMEENERGY CORP
+		DATE OF NAME CHANGE:	19920703
+
+	FORMER COMPANY:	
+		FORMER CONFORMED NAME:	KRM PETROLEUM CORP
+		DATE OF NAME CHANGE:	19900614
+</SEC-HEADER>
+<DOCUMENT>
+<TYPE>4
+<SEQUENCE>1
+<FILENAME>rdgdoc.xml
+<DESCRIPTION>FORM 4
+<TEXT>
+<XML>
+<?xml version="1.0"?>
+<ownershipDocument>
+
+    <schemaVersion>X0609</schemaVersion>
+
+    <documentType>4</documentType>
+
+    <periodOfReport>2026-09-18</periodOfReport>
+
+    <issuer>
+        <issuerCik>0000056868</issuerCik>
+        <issuerName>PRIMEENERGY RESOURCES CORP</issuerName>
+        <issuerTradingSymbol>PNRG</issuerTradingSymbol>
+        <issuerForeignTradingSymbol></issuerForeignTradingSymbol>
+    </issuer>
+
+    <reportingOwner>
+        <reportingOwnerId>
+            <rptOwnerCik>0001018124</rptOwnerCik>
+            <rptOwnerName>FONG GIFFORD</rptOwnerName>
+        </reportingOwnerId>
+        <reportingOwnerAddress>
+            <rptOwnerNonUSAddressFlag>false</rptOwnerNonUSAddressFlag>
+            <rptOwnerStreet1>3658 MT. DIABLO BLVD</rptOwnerStreet1>
+            <rptOwnerStreet2>SUITE 200</rptOwnerStreet2>
+            <rptOwnerCity>LAFAYETTE</rptOwnerCity>
+            <rptOwnerState>CA</rptOwnerState>
+            <rptOwnerZipCode>94549</rptOwnerZipCode>
+            <rptOwnerStateDescription></rptOwnerStateDescription>
+        </reportingOwnerAddress>
+        <reportingOwnerRelationship>
+            <isDirector>1</isDirector>
+        </reportingOwnerRelationship>
+    </reportingOwner>
+
+    <aff10b5One>0</aff10b5One>
+
+    <nonDerivativeTable>
+        <nonDerivativeTransaction>
+            <securityTitle>
+                <value>COMMON STOCK</value>
+            </securityTitle>
+            <transactionDate>
+                <value>2026-09-18</value>
+            </transactionDate>
+            <transactionCoding>
+                <transactionFormType>4</transactionFormType>
+                <transactionCode>P</transactionCode>
+                <equitySwapInvolved>0</equitySwapInvolved>
+            </transactionCoding>
+            <transactionAmounts>
+                <transactionShares>
+                    <value>100</value>
+                </transactionShares>
+                <transactionPricePerShare>
+                    <value>211.70</value>
+                </transactionPricePerShare>
+                <transactionAcquiredDisposedCode>
+                    <value>D</value>
+                </transactionAcquiredDisposedCode>
+            </transactionAmounts>
+            <postTransactionAmounts>
+                <sharesOwnedFollowingTransaction>
+                    <value>54464</value>
+                </sharesOwnedFollowingTransaction>
+            </postTransactionAmounts>
+            <ownershipNature>
+                <directOrIndirectOwnership>
+                    <value>D</value>
+                </directOrIndirectOwnership>
+            </ownershipNature>
+        </nonDerivativeTransaction>
+    </nonDerivativeTable>
+
+    <ownerSignature>
+        <signatureName>/s/ H. GIFFORD FONG</signatureName>
+        <signatureDate>2026-09-23</signatureDate>
+    </ownerSignature>
+</ownershipDocument>
+</XML>
+</TEXT>
+</DOCUMENT>
+</SEC-DOCUMENT>

@@ -13,8 +13,10 @@ from __future__ import annotations
 import html
 import re
 import xml.etree.ElementTree as ET
+from dataclasses import asdict
 from datetime import datetime
 
+from trade_news.collectors import form4
 from trade_news.collectors.base import Batch, Context, RawItem, collector
 
 FEED_URL = "https://www.sec.gov/cgi-bin/browse-edgar"
@@ -93,6 +95,7 @@ def to_raw_items(entries: list[dict]) -> list[RawItem]:
 )
 def fetch(ctx: Context, cursor: dict | None) -> Batch:
     cursor = dict(cursor or {})
+    seen_form4 = datetime.fromisoformat(cursor["4"]) if "4" in cursor else None
     headers = {"User-Agent": ctx.secrets["SEC_USER_AGENT"], "Accept-Encoding": "gzip, deflate"}
     forms = ctx.params.get("forms", ["8-K", "10-Q", "10-K", "4"])
     max_pages = int(ctx.params.get("max_pages", 5))
@@ -129,4 +132,52 @@ def fetch(ctx: Context, cursor: dict | None) -> Batch:
         if newest is not None:
             cursor[form] = newest.isoformat()
 
-    return Batch(items=to_raw_items(entries), cursor=cursor)
+    items = to_raw_items(entries)
+    if ctx.params.get("form4_details", True):
+        items = _with_form4_details(ctx, items, headers, seen_form4)
+    return Batch(items=items, cursor=cursor)
+
+
+def _with_form4_details(ctx: Context, items: list[RawItem], headers, seen_until) -> list[RawItem]:
+    """Fetches and parses new Form 4 filings. Items that don't matter get raw["llm_skip"]."""
+    th = form4.Thresholds(**ctx.params.get("form4_thresholds", {}))
+    budget = int(ctx.params.get("form4_max_details_per_run", 150))
+    out = []
+    for it in items:
+        is_new = seen_until is None or (it.published_at and it.published_at >= seen_until)
+        if not form_matches(it.raw.get("form"), "4") or not is_new or budget <= 0:
+            if form_matches(it.raw.get("form"), "4"):
+                # details not fetched (seen before or over budget): never worth an LLM call blind
+                it = RawItem(it.source_item_id, it.title, it.body, it.url, it.published_at,
+                             {**it.raw, "llm_skip": "form 4 without details"})  # fmt: skip
+            out.append(it)
+            continue
+        budget -= 1
+        try:
+            folder = it.url.rsplit("/", 1)[0]
+            text = ctx.get(f"{folder}/{it.source_item_id}.txt", headers=headers).text
+            parsed = form4.parse(text)
+        except Exception as exc:  # one broken filing must not fail the whole batch
+            ctx.log.warning("form4_fetch_failed", accession=it.source_item_id, error=repr(exc))
+            parsed = None
+        if parsed is None:
+            out.append(RawItem(it.source_item_id, it.title, it.body, it.url, it.published_at,
+                               {**it.raw, "llm_skip": "form 4 not parsed"}))  # fmt: skip
+            continue
+        significant, reason = form4.significance(parsed, th)
+        # The same trade is often reported in several filings (e.g. a fund and its manager).
+        # The headline is built from the facts, so an exact title match is a safe duplicate.
+        raw = {**it.raw, "form4": asdict(parsed), "significance": reason, "dedup_title": "exact"}
+        if not significant:
+            raw["llm_skip"] = reason
+        out.append(
+            RawItem(
+                it.source_item_id,
+                form4.headline(parsed),
+                form4.describe(parsed),
+                it.url,
+                it.published_at,
+                raw,
+            )
+        )
+    return out

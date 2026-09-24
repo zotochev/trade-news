@@ -1,0 +1,195 @@
+<SEC-DOCUMENT>0001140361-26-037481.txt : 20260923
+<SEC-HEADER>0001140361-26-037481.hdr.sgml : 20260923
+<ACCEPTANCE-DATETIME>20260923195148
+ACCESSION NUMBER:		0001140361-26-037481
+CONFORMED SUBMISSION TYPE:	4
+PUBLIC DOCUMENT COUNT:		1
+CONFORMED PERIOD OF REPORT:	20260921
+FILED AS OF DATE:		20260923
+DATE AS OF CHANGE:		20260923
+
+REPORTING-OWNER:	
+
+	OWNER DATA:	
+		COMPANY CONFORMED NAME:			Hawkins Jeffrey Alan
+		CENTRAL INDEX KEY:			0001505034
+		ORGANIZATION NAME:           	
+
+	FILING VALUES:
+		FORM TYPE:		4
+		SEC ACT:		1934 Act
+		SEC FILE NUMBER:	001-39486
+		FILM NUMBER:		261401916
+
+	MAIL ADDRESS:	
+		STREET 1:		5964 LA PLACE COURT
+		CITY:			CARLSBAD
+		STATE:			CA
+		ZIP:			92008
+
+ISSUER:		
+
+	COMPANY DATA:	
+		COMPANY CONFORMED NAME:			Quantum-Si Inc
+		CENTRAL INDEX KEY:			0001816431
+		STANDARD INDUSTRIAL CLASSIFICATION:	MEASURING & CONTROLLING DEVICES, NEC [3829]
+		ORGANIZATION NAME:           	08 Industrial Applications and Services
+		EIN:				851388175
+		STATE OF INCORPORATION:			DE
+		FISCAL YEAR END:			1231
+
+	BUSINESS ADDRESS:	
+		STREET 1:		29 BUSINESS PARK DRIVE
+		CITY:			BRANFORD
+		STATE:			CT
+		ZIP:			06405
+		BUSINESS PHONE:		(203) 458-7100
+
+	MAIL ADDRESS:	
+		STREET 1:		29 BUSINESS PARK DRIVE
+		CITY:			BRANFORD
+		STATE:			CT
+		ZIP:			06405
+
+	FORMER COMPANY:	
+		FORMER CONFORMED NAME:	HighCape Capital Acquisition Corp.
+		DATE OF NAME CHANGE:	20200629
+</SEC-HEADER>
+<DOCUMENT>
+<TYPE>4
+<SEQUENCE>1
+<FILENAME>form4.xml
+<DESCRIPTION>FORM 4
+<TEXT>
+<XML>
+<?xml version="1.0"?>
+<ownershipDocument>
+
+    <schemaVersion>X0609</schemaVersion>
+
+    <documentType>4</documentType>
+
+    <periodOfReport>2026-09-21</periodOfReport>
+
+    <issuer>
+        <issuerCik>0001816431</issuerCik>
+        <issuerName>Quantum-Si Inc</issuerName>
+        <issuerTradingSymbol>QSI</issuerTradingSymbol>
+        <issuerForeignTradingSymbol></issuerForeignTradingSymbol>
+    </issuer>
+
+    <reportingOwner>
+        <reportingOwnerId>
+            <rptOwnerCik>0001505034</rptOwnerCik>
+            <rptOwnerName>Hawkins Jeffrey Alan</rptOwnerName>
+        </reportingOwnerId>
+        <reportingOwnerAddress>
+            <rptOwnerNonUSAddressFlag>false</rptOwnerNonUSAddressFlag>
+            <rptOwnerStreet1>C/O QUANTUM-SI INCORPORATED</rptOwnerStreet1>
+            <rptOwnerStreet2>29 BUSINESS PARK DRIVE</rptOwnerStreet2>
+            <rptOwnerCity>BRANFORD</rptOwnerCity>
+            <rptOwnerState>CT</rptOwnerState>
+            <rptOwnerZipCode>06405</rptOwnerZipCode>
+            <rptOwnerStateDescription></rptOwnerStateDescription>
+        </reportingOwnerAddress>
+        <reportingOwnerRelationship>
+            <isDirector>true</isDirector>
+            <isOfficer>true</isOfficer>
+            <isTenPercentOwner>false</isTenPercentOwner>
+            <isOther>false</isOther>
+            <officerTitle>President &amp; CEO</officerTitle>
+        </reportingOwnerRelationship>
+    </reportingOwner>
+
+    <aff10b5One>false</aff10b5One>
+
+    <nonDerivativeTable>
+        <nonDerivativeTransaction>
+            <securityTitle>
+                <value>Class A Common Stock</value>
+            </securityTitle>
+            <transactionDate>
+                <value>2026-09-21</value>
+            </transactionDate>
+            <transactionCoding>
+                <transactionFormType>4</transactionFormType>
+                <transactionCode>S</transactionCode>
+                <equitySwapInvolved>false</equitySwapInvolved>
+                <footnoteId id="F1"/>
+            </transactionCoding>
+            <transactionAmounts>
+                <transactionShares>
+                    <value>20143</value>
+                </transactionShares>
+                <transactionPricePerShare>
+                    <value>0.7558</value>
+                    <footnoteId id="F2"/>
+                </transactionPricePerShare>
+                <transactionAcquiredDisposedCode>
+                    <value>D</value>
+                </transactionAcquiredDisposedCode>
+            </transactionAmounts>
+            <postTransactionAmounts>
+                <sharesOwnedFollowingTransaction>
+                    <value>3649659</value>
+                </sharesOwnedFollowingTransaction>
+            </postTransactionAmounts>
+            <ownershipNature>
+                <directOrIndirectOwnership>
+                    <value>D</value>
+                </directOrIndirectOwnership>
+            </ownershipNature>
+        </nonDerivativeTransaction>
+        <nonDerivativeTransaction>
+            <securityTitle>
+                <value>Class A Common Stock</value>
+            </securityTitle>
+            <transactionDate>
+                <value>2026-09-22</value>
+            </transactionDate>
+            <transactionCoding>
+                <transactionFormType>4</transactionFormType>
+                <transactionCode>S</transactionCode>
+                <equitySwapInvolved>false</equitySwapInvolved>
+                <footnoteId id="F1"/>
+            </transactionCoding>
+            <transactionAmounts>
+                <transactionShares>
+                    <value>9709</value>
+                </transactionShares>
+                <transactionPricePerShare>
+                    <value>0.7608</value>
+                    <footnoteId id="F3"/>
+                </transactionPricePerShare>
+                <transactionAcquiredDisposedCode>
+                    <value>D</value>
+                </transactionAcquiredDisposedCode>
+            </transactionAmounts>
+            <postTransactionAmounts>
+                <sharesOwnedFollowingTransaction>
+                    <value>3639950</value>
+                </sharesOwnedFollowingTransaction>
+            </postTransactionAmounts>
+            <ownershipNature>
+                <directOrIndirectOwnership>
+                    <value>D</value>
+                </directOrIndirectOwnership>
+            </ownershipNature>
+        </nonDerivativeTransaction>
+    </nonDerivativeTable>
+
+    <footnotes>
+        <footnote id="F1">Represents shares sold pursuant to a mandatory Quantum-Si sell-to-cover provision for required federal, state and local withholding taxes in connection with the vesting of previously granted restricted stock units.  Individual is not able to alter this mandatory sell-to-cover provision that is enacted at the grant date of the related restricted stock unit award.</footnote>
+        <footnote id="F2">Represents the weighted average sales price per share. The shares sold at prices ranging from $0.75 to $0.762 per share. Full information regarding the number of shares sold at each price shall be provided upon request to the staff of the U.S. Securities and Exchange Commission, the Issuer, or a security holder of the Issuer.</footnote>
+        <footnote id="F3">Represents the weighted average sales price per share. The shares sold at prices ranging from $0.7511 to $0.7779 per share. Full information regarding the number of shares sold at each price shall be provided upon request to the staff of the U.S. Securities and Exchange Commission, the Issuer, or a security holder of the Issuer.</footnote>
+    </footnotes>
+
+    <ownerSignature>
+        <signatureName>/s/ Christian LaPointe, Ph.D., Attorney-in-Fact.</signatureName>
+        <signatureDate>2026-09-23</signatureDate>
+    </ownerSignature>
+</ownershipDocument>
+</XML>
+</TEXT>
+</DOCUMENT>
+</SEC-DOCUMENT>

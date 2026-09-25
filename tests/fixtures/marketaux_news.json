@@ -1,0 +1,135 @@
+{
+ "warnings": [
+  "limit is higher than your plan allows"
+ ],
+ "meta": {
+  "found": 3537272,
+  "returned": 3,
+  "limit": 3,
+  "page": 1
+ },
+ "data": [
+  {
+   "uuid": "359e8e8f-6e5b-4682-876e-b5430f793b7d",
+   "title": "Bulls Charge Forward as Dow Outperforms in Midday Trading",
+   "description": "U.S. equity markets maintained a decisive upward trajectory during midday trading on Friday, September 25th, 2026, as investors reacted to cooling inflation",
+   "keywords": "",
+   "snippet": "U.S. equity markets maintained a decisive upward trajectory during midday trading on Friday, September 25th, 2026, as investors reacted to cooling inflation dat...",
+   "url": "https://www2.stockmarketwatch.com/stock-market-news/bulls-charge-forward-as-dow-outperforms-in-midday-trading/72235/",
+   "image_url": "https://www2.stockmarketwatch.com/stock-market-news/wp-content/uploads/2025/07/smw-icon-1000x700-logo.png",
+   "language": "en",
+   "published_at": "2026-09-25T16:07:12.000000Z",
+   "source": "thestockmarketwatch.com",
+   "relevance_score": null,
+   "entities": [
+    {
+     "symbol": "AMD",
+     "name": "Advanced Micro Devices, Inc.",
+     "exchange": null,
+     "exchange_long": null,
+     "country": "us",
+     "type": "equity",
+     "industry": "Technology",
+     "match_score": 17.79019,
+     "sentiment_score": 0.8901,
+     "highlights": [
+      {
+       "highlight": "<em>Advanced</em> <em>Micro</em> <em>Dev[+299 characters]",
+       "sentiment": 0.8901,
+       "highlighted_in": "main_text"
+      }
+     ]
+    },
+    {
+     "symbol": "NVDA",
+     "name": "NVIDIA Corporation",
+     "exchange": null,
+     "exchange_long": null,
+     "country": "us",
+     "type": "equity",
+     "industry": "Technology",
+     "match_score": 9.379827,
+     "sentiment_score": 0.8779,
+     "highlights": [
+      {
+       "highlight": "<em>Nvidia</em> Corp (NVDA) continues to[+189 characters]",
+       "sentiment": 0.8779,
+       "highlighted_in": "main_text"
+      }
+     ]
+    },
+    {
+     "symbol": "MU",
+     "name": "Micron Technology, Inc.",
+     "exchange": null,
+     "exchange_long": null,
+     "country": "us",
+     "type": "equity",
+     "industry": "Technology",
+     "match_score": 36.815952,
+     "sentiment_score": 0.60305,
+     "highlights": [
+      {
+       "highlight": "<em>Micron</em> <em>Technology</em>, <em[+334 characters]",
+       "sentiment": 0.9413,
+       "highlighted_in": "main_text"
+      }
+     ]
+    },
+    {
+     "symbol": "PAYX",
+     "name": "Paychex, Inc.",
+     "exchange": null,
+     "exchange_long": null,
+     "country": "us",
+     "type": "equity",
+     "industry": "Industrials",
+     "match_score": 26.279469,
+     "sentiment_score": 0,
+     "highlights": [
+      {
+       "highlight": "Additionally, <em>Paychex</em> <em>Inc</[+310 characters]",
+       "sentiment": 0,
+       "highlighted_in": "main_text"
+      }
+     ]
+    }
+   ],
+   "similar": []
+  },
+  {
+   "uuid": "41194ccb-b411-45dc-b7b0-07bae4660c7f",
+   "title": "Cadiz Inc. 8.875% DEP PFD A raises dividend by 1.8% to $0.56 (NASDAQ:CDZIP)",
+   "description": "Cadiz Inc. CDZIP declares $0.56 quarterly dividend (+1.8%), with 10.3% forward yield.",
+   "keywords": "",
+   "snippet": "To ensure this doesn’t happen in the future, please enable Javascript and cookies in your browser.\n\nIf you have an ad-blocker enabled you may be blocked from ...",
+   "url": "https://seekingalpha.com/news/4647251-cadiz-inc-8875-dep-pfd-a-raises-dividend-by-18-to-056",
+   "image_url": "https://static.seekingalpha.com/assets/og_image_1200-29b2bfe1a595477db6826bd2126c63ac2091efb7ec76347a8e7f81ba17e3de6c.png",
+   "language": "en",
+   "published_at": "2026-09-25T16:07:00.000000Z",
+   "source": "seekingalpha.com",
+   "relevance_score": null,
+   "entities": [
+    {
+     "symbol": "CDZI",
+     "name": "Cadiz Inc.",
+     "exchange": null,
+     "exchange_long": null,
+     "country": "us",
+     "type": "equity",
+     "industry": "Utilities",
+     "match_score": 86.84651,
+     "sentiment_score": 0,
+     "highlights": [
+      {
+       "highlight": "<em>Cadiz</em> <em>Inc</em>. 8.875% DEP PFD A raises dividend by 1.8% to $0.56 (NASDAQ:CDZIP)",
+       "sentiment": 0,
+       "highlighted_in": "title"
+      }
+     ]
+    }
+   ],
+   "similar": []
+  }
+ ]
+}

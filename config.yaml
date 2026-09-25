@@ -51,6 +51,14 @@ sources:
       symbols: [AAPL, MSFT, NVDA, AMZN, GOOGL, META, TSLA]
       lookback_days: 2
 
+  # Free plan: 100 requests/day, 3 articles per request. 1200 s = 72 requests/day; the budget
+  # is a hard daily cap (UTC day) kept in the cursor, below the plan to leave room for errors.
+  marketaux:
+    interval_seconds: 1200
+    params:
+      daily_request_budget: 80
+      query: {}          # overrides of the API filters, e.g. {countries: "us,ca"}
+
   # Central bank RSS, no key. Each feed returns weeks of history; entries older than
   # max_age_hours are stored but never annotated. Override the feed list with `feeds: [...]`.
   fed_rss:

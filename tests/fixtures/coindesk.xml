@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:wfw="http://wellformedweb.org/CommentAPI/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:sy="http://purl.org/rss/1.0/modules/syndication/" xmlns:slash="http://purl.org/rss/1.0/modules/slash/" xmlns:media="http://search.yahoo.com/mrss/" version="2.0">
+  <channel>
+    <title>CoinDesk: Bitcoin, Ethereum, Crypto News and Price Data</title>
+    <link>https://www.coindesk.com/</link>
+    <atom:link rel="self" type="application/rss+xml" href="https://www.coindesk.com/arc/outboundfeeds/rss"/>
+    <atom:link rel="hub" href="true"/>
+    <description>Leader in cryptocurrency, Bitcoin, Ethereum, XRP, blockchain, DeFi, digital finance and Web 3.0 news with analysis, video and live price updates.</description>
+    <lastBuildDate>Fri, 25 Sep 2026 16:22:09 +0000</lastBuildDate>
+    <language>en-US</language>
+    <copyright>© 2026 CoinDesk, Inc.</copyright>
+    <generator>CoinDesk</generator>
+    <ttl>5</ttl>
+    <sy:updatePeriod>hourly</sy:updatePeriod>
+    <sy:updateFrequency>1</sy:updateFrequency>
+    <image>
+      <url>https://downloads.coindesk.com/arc/failsafe/feeds/coindesk-feed-logo.png</url>
+      <title>CoinDesk: Bitcoin, Ethereum, Crypto News and Price Data</title>
+      <link>https://www.coindesk.com/</link>
+    </image>
+    <item>
+      <title><![CDATA[Circle and Tether step in to freeze hacker wallet after massive Bitget crypto heist]]></title>
+      <link>https://www.coindesk.com/markets/2026/09/25/circle-and-tether-step-in-to-freeze-hacker-wallet-after-massive-bitget-crypto-heist</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/fa4127f0e7d39e461c0b46e5ad103a58c4d7cf7f-1920x1080.png?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">a0b4a6ba-5569-4fef-940c-e402f9698d89</guid>
+      <pubDate>Fri, 25 Sep 2026 14:41:53 +0000</pubDate>
+      <description><![CDATA[The stablecoin issuer blacklisted a wallet holding about $318,000 in USDT and USDC. Most of the stolen funds sit in ether, which can't be frozen.]]></description>
+      <dc:creator>Oliver Knight</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/markets"><![CDATA[Markets]]></category>
+      <category domain="tag"><![CDATA[Circle]]></category>
+      <category domain="tag"><![CDATA[Tether]]></category>
+      <category domain="https://www.coindesk.com/">News</category>
+    </item>
+<item>
+      <title><![CDATA[Tokenization is moving faster than Washington]]></title>
+      <link>https://www.coindesk.com/opinion/2026/09/25/tokenization-is-moving-faster-than-washington</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/795133dffb990742b929b07d85a82856f0623e6f-7000x4000.jpg?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">4b1641e9-2454-46f5-841d-56cf7c985a35</guid>
+      <pubDate>Fri, 25 Sep 2026 14:37:32 +0000</pubDate>
+      <description><![CDATA[Regulatory clarity is not simply a legal or political issue, argues former New York Governor Andrew Cuomo. It is an economic one.]]></description>
+      <dc:creator>Andrew Cuomo</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/opinion"><![CDATA[Opinion]]></category>
+      <category domain="https://www.coindesk.com/">Opinion</category>
+    </item>
+<item>
+      <title><![CDATA[Tether confirms minimal EQIBank exposure following $89M US asset seizure]]></title>
+      <link>https://www.coindesk.com/policy/2026/09/25/tether-confirms-minimal-eqibank-exposure-following-usd89m-us-asset-seizure</link>
+      <media:content url="https://cdn.sanity.io/images/s3y3vcno/production/3137cc47810b9ff5837f91552adf6f55d77eaa56-1259x708.jpg?fm=jpg&amp;w=1920&amp;h=1080&amp;crop=focalpoint&amp;fit=clip" type="image/*" medium="image"/>
+      <guid isPermaLink="false">8c72534c-d321-4ff2-a9db-0d3ee8cc1a04</guid>
+      <pubDate>Fri, 25 Sep 2026 14:32:48 +0000</pubDate>
+      <description><![CDATA[While Tether's stated ceiling places its maximum exposure under $64 million, the incident underscores lingering counterparty risks in fiat gateway networks.]]></description>
+      <dc:creator>Olivier Acuna</dc:creator>
+      <content:encoded/>
+      <dc:description/>
+      <category domain="https://www.coindesk.com/policy"><![CDATA[Policy]]></category>
+      <category domain="tag"><![CDATA[Tether]]></category>
+      <category domain="https://www.coindesk.com/">News</category>
+    </item>
+
+  </channel>
+</rss>

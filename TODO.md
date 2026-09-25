@@ -41,8 +41,9 @@
 - [ ] Уточнить шкалу importance в промпте (критерии и примеры, промпт v3) — лучше после этапа 5
       или по ручным замечаниям из админки.
 - [ ] Этап 2: остальные источники, по одному. Сделано: RSS ЦБ (`fed_rss`, `ecb_rss`, `boe_rss`,
-      `boj_rss`), Marketaux. Дальше: CryptoPanic, экономический календарь (FMP),
-      FRED, CME FedWatch. Нужны ключи CryptoPanic, FMP, FRED.
+      `boj_rss`), Marketaux, CoinDesk RSS (`coindesk`, крипта). Дальше: экономический календарь (FMP),
+      FRED, CME FedWatch. Нужны ключи FMP, FRED.
+      CryptoPanic API платный (2026-09-25), вместо него один CoinDesk по решению заказчика.
       cryptocurrency.cv не годится: бесплатно отдаёт 0 статей, затем `403 BOT_BLOCKED` (2026-09-25).
 - [ ] Этап 6: логика по форексу.
 

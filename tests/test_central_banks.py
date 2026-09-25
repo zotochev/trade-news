@@ -2,7 +2,8 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 from tests.conftest import FIXTURES, fake_ctx
-from trade_news.collectors.central_banks import fetch_boe, fetch_fed, parse_rss
+from trade_news.collectors.central_banks import fetch_boe, fetch_fed
+from trade_news.collectors.rss import parse_rss
 
 FED = (FIXTURES / "cb_fed_press.xml").read_bytes()  # starts with a BOM, CDATA everywhere
 BOE = (FIXTURES / "cb_boe_news.xml").read_bytes()  # guid is not a URL

@@ -59,6 +59,12 @@ sources:
       daily_request_budget: 80
       query: {}          # overrides of the API filters, e.g. {countries: "us,ca"}
 
+  # CoinDesk RSS, no key, ~25 newest articles. Entries older than max_age_hours are stored
+  # but never annotated (the feed returns days of history); 6 h = llm.max_item_age_hours.
+  coindesk:
+    interval_seconds: 300
+    params: {max_age_hours: 6}
+
   # Central bank RSS, no key. Each feed returns weeks of history; entries older than
   # max_age_hours are stored but never annotated. Override the feed list with `feeds: [...]`.
   fed_rss:

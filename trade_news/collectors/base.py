@@ -35,8 +35,8 @@ class RawItem:
 class Batch:
     items: list[RawItem]
     cursor: dict[str, Any] | None = None
-    # rows for the rate_expectations table (CME FedWatch snapshots), stored as is
-    rate_expectations: list[dict[str, Any]] = field(default_factory=list)
+    # non-news data stored as is, {table name: rows}; tables are listed in pipeline.ROW_TABLES
+    rows: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
 
 
 class Getter(Protocol):

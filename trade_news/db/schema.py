@@ -312,6 +312,19 @@ rate_expectations = sa.Table(
     sa.UniqueConstraint("central_bank", "meeting_date", "snapshot_at", "outcome"),
 )
 
+# Macro time series (FRED). The first published value is kept: later revisions are ignored,
+# so the table shows what the market saw on release.
+macro_observations = sa.Table(
+    "macro_observations",
+    metadata,
+    sa.Column("series_id", sa.Text, nullable=False),  # e.g. DGS2, CPIAUCSL
+    sa.Column("obs_date", sa.Date, nullable=False),
+    sa.Column("value", sa.Float, nullable=False),
+    sa.Column("source", sa.Text, nullable=False),
+    sa.Column("fetched_at", UTCDateTime, nullable=False),
+    sa.PrimaryKeyConstraint("series_id", "obs_date"),
+)
+
 prices = sa.Table(
     "prices",
     metadata,

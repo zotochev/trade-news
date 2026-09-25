@@ -36,14 +36,14 @@ def test_outcome_label():
 def test_first_run_stores_baseline_without_news(monkeypatch):
     batch = run(monkeypatch, snapshot("2026-09-22", 55.4), None)
     assert batch.items == []
-    assert len(batch.rate_expectations) == 5  # 2 + 3 outcomes
+    assert len(batch.rows["rate_expectations"]) == 5  # 2 + 3 outcomes
     assert batch.cursor["trade_date"] == "2026-09-22"
 
 
 def test_same_trade_date_does_nothing(monkeypatch):
     cursor = {"trade_date": "2026-09-22", "meetings": {}}
     batch = run(monkeypatch, snapshot("2026-09-22", 70.0), cursor)
-    assert batch.items == [] and batch.rate_expectations == []
+    assert batch.items == [] and batch.rows == {}
     assert batch.cursor is cursor
 
 
@@ -71,8 +71,8 @@ def test_ingest_stores_snapshots_once(engine, cfg, monkeypatch):
     batch = run(monkeypatch, snapshot("2026-09-22", 55.4), None)
     spec = news_spec("cme_fedwatch", title_dedup=False)
     with engine.begin() as conn:
-        assert ingest(conn, spec, batch, cfg, NOW).snapshots == 5
-        assert ingest(conn, spec, batch, cfg, NOW).snapshots == 0
+        assert ingest(conn, spec, batch, cfg, NOW).rows == 5
+        assert ingest(conn, spec, batch, cfg, NOW).rows == 0
         assert conn.execute(sa.select(sa.func.count()).select_from(rate_expectations)).scalar() == 5
 
     later = run(monkeypatch, snapshot("2026-09-23", 70.9), batch.cursor)

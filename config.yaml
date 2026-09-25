@@ -74,6 +74,22 @@ sources:
       meetings_ahead: 3
       min_shift_pp: 10
 
+  # FRED (free key, 120 requests/min): one request per series per run. New observations go to
+  # macro_observations; series with alert_bp create a news item on a big day-over-day move.
+  # The monthly series supply actual values for the economic calendar.
+  fred:
+    interval_seconds: 3600
+    params:
+      lookback_days: 400   # history loaded on the first run
+      series:
+        - {id: DGS2, name: US 2-year Treasury yield, alert_bp: 10, hint: "US Treasury yields (USD, US rates)"}
+        - {id: DGS10, name: US 10-year Treasury yield, alert_bp: 10, hint: "US Treasury yields (USD, US rates)"}
+        - {id: DFF, name: Effective federal funds rate}
+        - {id: CPIAUCSL, name: US CPI}
+        - {id: CPILFESL, name: US core CPI}
+        - {id: PAYEMS, name: US nonfarm payrolls}
+        - {id: UNRATE, name: US unemployment rate}
+
   # Central bank RSS, no key. Each feed returns weeks of history; entries older than
   # max_age_hours are stored but never annotated. Override the feed list with `feeds: [...]`.
   fed_rss:

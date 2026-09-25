@@ -138,5 +138,5 @@ def fetch(ctx: Context, cursor: dict | None) -> Batch:
     return Batch(
         items=items,
         cursor={"trade_date": trade_date, "meetings": cur},
-        rate_expectations=rows,
+        rows={"rate_expectations": rows},
     )

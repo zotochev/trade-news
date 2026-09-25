@@ -19,6 +19,7 @@ from trade_news.db.schema import (
     collector_runs,
     collector_state,
     items,
+    macro_observations,
     rate_expectations,
     raw_items,
 )
@@ -26,6 +27,15 @@ from trade_news.dedup import content_hash, find_duplicate, normalize_title, norm
 from trade_news.http import RateLimiter, make_getter
 
 log = structlog.get_logger()
+
+# Tables a collector may fill through Batch.rows: existing rows (same key) are left as is.
+ROW_TABLES = {
+    "rate_expectations": (
+        rate_expectations,
+        ("central_bank", "meeting_date", "snapshot_at", "outcome"),
+    ),
+    "macro_observations": (macro_observations, ("series_id", "obs_date")),
+}
 
 # SQLite has a single writer anyway, and dedup must see items written by other sources.
 WRITE_LOCK = threading.Lock()
@@ -37,7 +47,7 @@ class IngestStats:
     inserted: int = 0  # new raw rows (new items + new revisions)
     seen_before: int = 0  # exact same content already stored or repeated within the batch
     dedup_merged: int = 0  # new items attached to an existing group
-    snapshots: int = 0  # new rate_expectations rows
+    rows: int = 0  # new rows in ROW_TABLES (FedWatch snapshots, FRED observations)
 
 
 def utcnow() -> datetime:
@@ -82,15 +92,9 @@ def ingest(
         stats.inserted += 1
         if _upsert_item(conn, spec, it, raw_id, fetched_at, cfg):
             stats.dedup_merged += 1
-    stats.snapshots = insert_ignore_many(
-        conn,
-        rate_expectations,
-        batch.rate_expectations,
-        "central_bank",
-        "meeting_date",
-        "snapshot_at",
-        "outcome",
-    )
+    for name, rows in batch.rows.items():
+        table, conflict_cols = ROW_TABLES[name]
+        stats.rows += insert_ignore_many(conn, table, rows, *conflict_cols)
     if batch.cursor is not None:
         _save_cursor(conn, spec.name, batch.cursor)
     return stats

@@ -53,6 +53,7 @@ SOURCE_RU = {
     **CENTRAL_BANKS,
 }
 MAX_LEN = 4096  # Telegram message limit
+DIGEST_HEAD = "📰 <b>Сводка новостей</b>\n\n"
 
 
 def _label(link: dict) -> str:
@@ -147,20 +148,8 @@ def _facts(source: str, raw: dict) -> str | None:
 def format_item(item: dict) -> str:
     """`item` as returned by views.news_item: payload_json, links, relevance, raw_json, …"""
     esc = html.escape
-    payload = item.get("payload_json") or {}
-    raw = item.get("raw_json") or {}
-    source = item.get("source") or ""
-    links = sorted(
-        item.get("links") or [],
-        key=lambda x: (not x.get("is_primary"), -(x.get("importance") or 0)),
-    )
-    emoji, kind = _kind(source, payload.get("event_type"), raw)
-    head = f"{emoji} {esc(kind)}"
-    if links:
-        main = links[0]
-        asset = f"{_label(main)} {ARROW.get(main.get('direction'), '')}".strip()
-        head += f" · <b>{esc(asset)}</b> · важность {main.get('importance')}/5"
-    lines = [head, esc(payload.get("summary") or item.get("title") or "")]
+    payload, raw, source, links = _parts(item)
+    lines = [_head(item), esc(payload.get("summary") or item.get("title") or "")]
     if facts := _facts(source, raw):
         lines.append(esc(facts))
     others = [
@@ -171,11 +160,66 @@ def format_item(item: dict) -> str:
         lines.append("Также: " + " · ".join(others))
     if when := _when(item.get("relevance")):
         lines.append(f"Когда: {when}")
-    url = item.get("raw_url") or item.get("canonical_url")
-    name = esc(SOURCE_RU.get(source, source or "источник"))
-    if url and url.startswith(("https://", "http://")):
-        lines.append(f'Источник: <a href="{esc(url, quote=True)}">{name}</a>')
-    else:
-        lines.append(f"Источник: {name}")
+    lines.append(f"Источник: {_source_link(item)}")
     text = "\n".join(lines)
     return text if len(text) <= MAX_LEN else text[: MAX_LEN - 1] + "…"
+
+
+def _parts(item: dict) -> tuple[dict, dict, str, list[dict]]:
+    links = sorted(
+        item.get("links") or [],
+        key=lambda x: (not x.get("is_primary"), -(x.get("importance") or 0)),
+    )
+    return (
+        item.get("payload_json") or {},
+        item.get("raw_json") or {},
+        item.get("source") or "",
+        links,
+    )
+
+
+def _head(item: dict) -> str:
+    payload, raw, source, links = _parts(item)
+    emoji, kind = _kind(source, payload.get("event_type"), raw)
+    head = f"{emoji} {html.escape(kind)}"
+    if links:
+        main = links[0]
+        asset = f"{_label(main)} {ARROW.get(main.get('direction'), '')}".strip()
+        head += f" · <b>{html.escape(asset)}</b> · важность {main.get('importance')}/5"
+    return head
+
+
+def _source_link(item: dict) -> str:
+    source = item.get("source") or ""
+    url = item.get("raw_url") or item.get("canonical_url")
+    name = html.escape(SOURCE_RU.get(source, source or "источник"))
+    if url and url.startswith(("https://", "http://")):
+        return f'<a href="{html.escape(url, quote=True)}">{name}</a>'
+    return name
+
+
+def format_digest(items: list[dict]) -> list[tuple[list[int], str]]:
+    """Several items as few messages: [(item ids, text)], each text within the Telegram limit.
+    Every item is a short block: kind and asset, summary with the source link, numbers."""
+    blocks = []
+    for item in items:
+        payload, raw, source, _ = _parts(item)
+        summary = html.escape(payload.get("summary") or item.get("title") or "")
+        lines = [_head(item), f"{summary} ({_source_link(item)})"]
+        if facts := _facts(source, raw):
+            lines.append(html.escape(facts))
+        block = "\n".join(lines)
+        blocks.append((item["id"], block if len(block) <= MAX_LEN // 2 else block[: MAX_LEN // 2]))
+
+    messages: list[tuple[list[int], str]] = []
+    ids: list[int] = []
+    parts: list[str] = []
+    for item_id, block in blocks:
+        if parts and len(DIGEST_HEAD) + sum(len(p) + 2 for p in parts) + len(block) > MAX_LEN:
+            messages.append((ids, DIGEST_HEAD + "\n\n".join(parts)))
+            ids, parts = [], []
+        ids.append(item_id)
+        parts.append(block)
+    if parts:
+        messages.append((ids, DIGEST_HEAD + "\n\n".join(parts)))
+    return messages

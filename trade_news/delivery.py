@@ -27,7 +27,7 @@ from trade_news.db.schema import annotations, deliveries, items, settings
 from trade_news.http import RateLimiter
 from trade_news.telegram import subscribers as subs
 from trade_news.telegram.api import Api, TelegramError
-from trade_news.telegram.message import format_item
+from trade_news.telegram.message import format_digest, format_item
 
 log = structlog.get_logger()
 
@@ -107,9 +107,9 @@ def passes(
 
 def matching_items(
     conn: sa.Connection, rules: DeliveryRules, since: datetime
-) -> tuple[list[int], int]:
+) -> tuple[list[int], int, set[int]]:
     """(ids of items annotated since `since` that pass the rules, priority signals first, then
-    oldest first; total annotated)."""
+    oldest first; total annotated; ids of the priority ones)."""
     rows = conn.execute(
         sa.select(annotations.c.item_id, views.EVENT_TYPE.label("event_type"), items.c.source)
         .join(items, items.c.id == annotations.c.item_id)
@@ -120,7 +120,8 @@ def matching_items(
     ok = [r for r in rows if passes(rules, links.get(r.item_id, []), r.event_type, r.source)]
     # priority signals first: the per-hour cap must not hold them behind ordinary news
     ok.sort(key=lambda r: not is_priority(rules, r.source, r.event_type))
-    return [r.item_id for r in ok], len(rows)
+    priority = {r.item_id for r in ok if is_priority(rules, r.source, r.event_type)}
+    return [r.item_id for r in ok], len(rows), priority
 
 
 # --- sending ---------------------------------------------------------------------------
@@ -129,9 +130,10 @@ def matching_items(
 @dataclass(slots=True)
 class DeliveryStats:
     candidates: int = 0
-    sent: int = 0
+    sent: int = 0  # items
+    messages: int = 0
     failed: int = 0
-    deferred: int = 0  # over the per-hour cap, will go later if still fresh
+    deferred: int = 0  # items over the per-hour cap, will go later if still fresh
     skipped: int = 0  # became too old while waiting
     stopped: str | None = None
 
@@ -142,6 +144,8 @@ def run_delivery(
     root_chat_id: int | None,
     now: Callable[[], datetime],
 ) -> DeliveryStats:
+    """Priority signals go one per message; the other items of a run go as one digest (one
+    item alone is sent as a normal message). The per-hour cap counts messages."""
     stats = DeliveryStats()
     ts = now()
     with engine.connect() as conn:
@@ -151,7 +155,7 @@ def run_delivery(
     cutoff = ts - timedelta(hours=rules.max_age_hours)
     with engine.begin() as conn:
         stats.skipped = _skip_stale(conn, cutoff)
-        item_ids, _ = matching_items(conn, rules, cutoff)
+        item_ids, _, priority = matching_items(conn, rules, cutoff)
         recipients = subs.recipients(conn, root_chat_id)
     stats.candidates = len(item_ids)
     if not item_ids or not recipients:
@@ -170,25 +174,29 @@ def run_delivery(
                 ).scalars()
             )
             sent_last_hour = conn.execute(
-                sa.select(sa.func.count()).where(
+                sa.select(sa.func.count(sa.distinct(deliveries.c.message_id))).where(
                     deliveries.c.channel == str(chat_id),
                     deliveries.c.status == "sent",
                     deliveries.c.sent_at >= ts - timedelta(hours=1),
                 )
             ).scalar()
         todo = [i for i in item_ids if i not in done]
+        if not todo:
+            continue
+        messages = _plan(engine, chat_id, todo, priority, now)
         budget = max(0, rules.max_per_hour - sent_last_hour)
-        stats.deferred += max(0, len(todo) - budget)
-        for item_id in todo[:budget]:
+        stats.deferred += sum(len(ids) for ids, _ in messages[budget:])
+        for ids, text in messages[:budget]:
             global_limit.acquire()
             per_chat.acquire()
-            outcome = _send_one(engine, api, chat_id, item_id, root_chat_id, now)
+            outcome = _send(engine, api, chat_id, ids, text, root_chat_id, now)
             if outcome == "sent":
-                stats.sent += 1
+                stats.sent += len(ids)
+                stats.messages += 1
             elif outcome == "failed":
-                stats.failed += 1
+                stats.failed += len(ids)
             elif outcome == "chat_gone":
-                stats.failed += 1
+                stats.failed += len(ids)
                 break
             else:  # "stop": Telegram unavailable, try again next run
                 stats.stopped = "telegram_unavailable"
@@ -197,6 +205,40 @@ def run_delivery(
     if stats.sent or stats.failed or stats.deferred or stats.skipped:
         log.info("delivery_done", **asdict(stats))
     return stats
+
+
+def _plan(
+    engine, chat_id: int, todo: list[int], priority: set[int], now
+) -> list[tuple[list[int], str]]:
+    """Messages for one chat: [(item ids, text)], priority ones first. Creates the pending
+    delivery rows, so nothing planned is lost if Telegram fails midway."""
+    with engine.begin() as conn:
+        insert_ignore(
+            conn,
+            deliveries,
+            [
+                {"item_id": i, "channel": str(chat_id), "status": "pending", "created_at": now()}
+                for i in todo
+            ],
+            "item_id",
+            "channel",
+        )
+        loaded = {i: views.news_item(conn, i) for i in todo}
+        gone = [i for i, item in loaded.items() if item is None]
+        if gone:
+            conn.execute(
+                deliveries.update()
+                .where(deliveries.c.item_id.in_(gone), deliveries.c.channel == str(chat_id))
+                .values(status="skipped")
+            )
+    items = [(i, loaded[i]) for i in todo if loaded[i] is not None]
+    messages = [([i], format_item(item)) for i, item in items if i in priority]
+    rest = [item for i, item in items if i not in priority]
+    if len(rest) == 1:
+        messages.append(([rest[0]["id"]], format_item(rest[0])))
+    elif rest:
+        messages += format_digest(rest)
+    return messages
 
 
 def _skip_stale(conn, cutoff: datetime) -> int:
@@ -209,30 +251,8 @@ def _skip_stale(conn, cutoff: datetime) -> int:
     ).rowcount
 
 
-def _send_one(engine, api: Api, chat_id: int, item_id: int, root_chat_id, now) -> str:
-    with engine.begin() as conn:
-        insert_ignore(
-            conn,
-            deliveries,
-            [
-                {
-                    "item_id": item_id,
-                    "channel": str(chat_id),
-                    "status": "pending",
-                    "created_at": now(),
-                }
-            ],
-            "item_id",
-            "channel",
-        )
-        item = views.news_item(conn, item_id)
-    row = (deliveries.c.item_id == item_id) & (deliveries.c.channel == str(chat_id))
-    if item is None:
-        with engine.begin() as conn:
-            conn.execute(deliveries.update().where(row).values(status="skipped"))
-        return "failed"
-
-    text = format_item(item)
+def _send(engine, api: Api, chat_id: int, ids: list[int], text: str, root_chat_id, now) -> str:
+    row = deliveries.c.item_id.in_(ids) & (deliveries.c.channel == str(chat_id))
     try:
         try:
             result = api(
@@ -264,7 +284,7 @@ def _send_one(engine, api: Api, chat_id: int, item_id: int, root_chat_id, now) -
                 _bump(conn, row, str(exc))
                 return "stop"
             _bump(conn, row, str(exc), give_up=True)
-        log.warning("delivery_failed", chat_id=chat_id, item_id=item_id, error=str(exc))
+        log.warning("delivery_failed", chat_id=chat_id, item_ids=ids, error=str(exc))
         return "failed"
     except Exception as exc:  # network: Telegram unreachable
         with engine.begin() as conn:
@@ -284,7 +304,7 @@ def _send_one(engine, api: Api, chat_id: int, item_id: int, root_chat_id, now) -
 
 
 def _bump(conn, row, error: str, give_up: bool = False) -> None:
-    attempts = conn.execute(sa.select(deliveries.c.attempts).where(row)).scalar() or 0
+    attempts = conn.execute(sa.select(sa.func.max(deliveries.c.attempts)).where(row)).scalar() or 0
     status = "failed" if give_up or attempts + 1 >= MAX_ATTEMPTS else "pending"
     conn.execute(
         deliveries.update()

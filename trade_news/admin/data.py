@@ -513,10 +513,12 @@ def delivery_page(conn, rules, now: datetime) -> dict:
             .group_by(deliveries.c.status)
         ).all()
     )
-    passed, total = delivery.matching_items(conn, rules, since)
+    passed, total, _ = delivery.matching_items(conn, rules, since)
     per_threshold = []
     for t in range(1, 6):
-        n, _ = delivery.matching_items(conn, rules.model_copy(update={"min_importance": t}), since)
+        n, _, _ = delivery.matching_items(
+            conn, rules.model_copy(update={"min_importance": t}), since
+        )
         per_threshold.append({"min": t, "n": len(n)})
     recent = conn.execute(
         sa.select(

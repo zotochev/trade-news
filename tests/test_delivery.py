@@ -16,7 +16,7 @@ from trade_news.db.schema import deliveries, subscribers
 from trade_news.delivery import DeliveryRules, passes, run_delivery
 from trade_news.pipeline import ingest
 from trade_news.telegram.api import TelegramError
-from trade_news.telegram.message import format_item
+from trade_news.telegram.message import format_digest, format_item
 
 OWNER, ALICE = 111, 222
 
@@ -148,19 +148,33 @@ def test_sends_to_owner_and_subscribers_once(world):
     tg = FakeTelegram()
     stats = run_delivery(world, tg, OWNER, lambda: NOW + timedelta(minutes=1))
     assert (stats.candidates, stats.sent) == (2, 4)  # 2 items (neutral one filtered) × 2 chats
-    assert len(tg.to(OWNER)) == 2 and len(tg.to(ALICE)) == 2
-    aapl = next(t for t in tg.to(OWNER) if "AAPL" in t)
-    assert aapl.startswith("📈 Отчётность · <b>AAPL ▲</b> · важность 4/5")
-    assert "&lt;важно&gt;" in aapl  # summary is escaped for HTML
+    assert stats.messages == 2  # one digest per chat
+    assert len(tg.to(OWNER)) == 1 and len(tg.to(ALICE)) == 1
+    (digest,) = tg.to(OWNER)
+    assert digest.startswith("📰 <b>Сводка новостей</b>")
+    assert "📈 Отчётность · <b>AAPL ▲</b> · важность 4/5" in digest
+    assert "🎯 Прогноз компании · <b>MSFT ▼</b>" in digest
+    assert "&lt;важно&gt;" in digest  # summary is escaped for HTML
     again = run_delivery(world, tg, OWNER, lambda: NOW + timedelta(minutes=2))
-    assert again.sent == 0 and len(tg.sent) == 4
+    assert again.sent == 0 and len(tg.sent) == 2
+
+
+def test_priority_item_goes_alone_and_first(world):
+    enable(world, always_event_types=["guidance"])  # makes the MSFT item a priority one
+    tg = FakeTelegram()
+    run_delivery(world, tg, OWNER, lambda: NOW + timedelta(minutes=1))
+    first, second = tg.to(OWNER)
+    assert first.startswith("🎯 Прогноз компании · <b>MSFT ▼</b>")
+    assert second.startswith("📈 Отчётность · <b>AAPL ▲</b>")  # the only other one: no digest
 
 
 def test_hourly_cap_defers_then_sends(world):
-    enable(world, max_per_hour=1)
+    # the cap counts messages: MSFT (priority) goes alone, AAPL waits for the next hour
+    enable(world, max_per_hour=1, always_event_types=["guidance"])
     tg = FakeTelegram()
     s1 = run_delivery(world, tg, OWNER, lambda: NOW + timedelta(minutes=1))
-    assert (s1.sent, s1.deferred) == (2, 2)
+    assert (s1.sent, s1.deferred) == (2, 2)  # per chat: MSFT sent, AAPL deferred
+    assert all("MSFT" in text for _, text in tg.sent)
     s2 = run_delivery(world, tg, OWNER, lambda: NOW + timedelta(minutes=30))
     assert s2.sent == 0
     s3 = run_delivery(world, tg, OWNER, lambda: NOW + timedelta(minutes=62))
@@ -174,7 +188,7 @@ def test_blocked_chat_is_unsubscribed_others_still_get_it(world):
         "sendMessage", 403, "Forbidden: bot was blocked by the user", None
     )
     run_delivery(world, tg, OWNER, lambda: NOW + timedelta(minutes=1))
-    assert len(tg.to(OWNER)) == 2
+    assert len(tg.to(OWNER)) == 1  # the digest with both items
     with world.connect() as conn:
         assert conn.execute(sa.select(subscribers.c.is_active)).scalar() is False
 
@@ -313,3 +327,20 @@ def test_format_insider():
     text = format_item(item)
     assert text.startswith("💼 Инсайдер")
     assert "покупка на рынке $7.5M · Director DOE JOHN" in text
+
+
+def test_long_digest_is_split_within_limit():
+    items = [
+        {
+            "id": n,
+            "source": "finnhub_market_news",
+            "payload_json": {"summary": "Очень длинная суть " * 40, "event_type": "other"},
+            "links": [link(importance=4)],
+        }
+        for n in range(10)
+    ]
+    messages = format_digest(items)
+    assert len(messages) > 1
+    assert all(len(text) <= 4096 for _, text in messages)
+    assert [i for ids, _ in messages for i in ids] == list(range(10))  # every item exactly once
+    assert all(text.startswith("📰 <b>Сводка новостей</b>") for _, text in messages)

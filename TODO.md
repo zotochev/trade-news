@@ -40,9 +40,10 @@
       Нужно решить: источник цен (для акций США интрадей).
 - [ ] Уточнить шкалу importance в промпте (критерии и примеры, промпт v3) — лучше после этапа 5
       или по ручным замечаниям из админки.
-- [ ] Этап 2: остальные источники (Marketaux, CryptoPanic, cryptocurrency.cv, экономический
-      календарь, RSS ЦБ, FRED, CME FedWatch). Нужны бесплатные ключи Marketaux, CryptoPanic,
-      FMP, FRED.
+- [ ] Этап 2: остальные источники, по одному. Сделано: RSS ЦБ (`fed_rss`, `ecb_rss`, `boe_rss`,
+      `boj_rss`). Дальше: Marketaux (ключ есть), CryptoPanic, экономический календарь (FMP),
+      FRED, CME FedWatch. Нужны ключи CryptoPanic, FMP, FRED.
+      cryptocurrency.cv не годится: бесплатно отдаёт 0 статей, затем `403 BOT_BLOCKED` (2026-09-25).
 - [ ] Этап 6: логика по форексу.
 
 ## Открытые вопросы к заказчику
@@ -88,6 +89,9 @@
 - Правила кода: функции и dataclass вместо иерархий классов, SQLAlchemy Core, SQLite.
   Новый источник: файл в `trade_news/collectors/` + секция в `config.yaml` (см. README).
 - Коммит → сразу `git push` (сервер деплоится через `git pull`).
+- RSS ЦБ: ленты отдают недели истории без курсора; записи старше `max_age_hours` сохраняются
+  с `llm_skip`, иначе первый сбор отправил бы старые решения в LLM и Telegram как свежие.
+  Рутина (операции, статистика) отсекается `llm.exclude`. BoE отдаёт 403 на User-Agent httpx.
 - Не запускать локально `trade-news run` при работающем сервере: второй процесс, опрашивающий
   того же бота, получит 409 и будет мешать серверу. Для проверок: `trade-news admin`
   (только веб), `trade-news collect <source>`, `trade-news annotate --batches N`.

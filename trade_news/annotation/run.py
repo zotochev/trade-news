@@ -123,6 +123,8 @@ def _hints(conn: sa.Connection, source: str, raw: dict) -> str | None:
         ticker = (raw.get("form4") or {}).get("ticker") or asset_ref.equity_by_cik(conn, raw["cik"])
         form = raw.get("form")
         return f"SEC form {form}; issuer ticker: {ticker or 'unknown'}"
+    if raw.get("hint"):  # set by the collector, e.g. "Bank of England (currency GBP)"
+        return raw["hint"]
     if raw.get("related"):
         return f"related tickers: {raw['related']}"
     return None

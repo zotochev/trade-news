@@ -51,6 +51,21 @@ sources:
       symbols: [AAPL, MSFT, NVDA, AMZN, GOOGL, META, TSLA]
       lookback_days: 2
 
+  # Central bank RSS, no key. Each feed returns weeks of history; entries older than
+  # max_age_hours are stored but never annotated. Override the feed list with `feeds: [...]`.
+  fed_rss:
+    interval_seconds: 600
+    params: {max_age_hours: 24}
+  ecb_rss:
+    interval_seconds: 600
+    params: {max_age_hours: 24}
+  boe_rss:
+    interval_seconds: 600
+    params: {max_age_hours: 24}
+  boj_rss:
+    interval_seconds: 600
+    params: {max_age_hours: 24}
+
 # LLM annotation. Only these two models, tried in order. daily_request_limit / rpm_limit are
 # this app's share of the Gemini project quota (the rest belongs to other apps on the same key).
 llm:
@@ -61,7 +76,14 @@ llm:
   max_item_age_hours: 6    # older items (e.g. the first-run backlog) are never annotated
   body_max_chars: 1500
   quota_reset_hour_utc: 8  # Gemini daily quota resets at midnight Pacific
-  exclude: []             # e.g. {source: x, title_regex: "..."}: stored, never sent to the LLM
+  exclude:                 # {source: x, title_regex: "..."}: stored, never sent to the LLM
+    # Routine operations and statistics of central banks: no market signal.
+    - source: boj_rss
+      title_regex: "(?i)funds-supplying operations|government bonds held by|current account balances|statistics|principal figures|schedule of outright purchases|scams|bank of japan accounts|figures on fails|amounts outstanding|transactions with the government|collateral accepted|average contract interest|\\(boj review\\)|discussion paper|market operations by|financial results of"
+    - source: boe_rss
+      title_regex: "(?i)market notice|statistical notice|green notice|^minutes of the (?!monetary policy)|rtgs|announces new office|^pra |banknote|cv and questionnaire|consortium minutes"
+    - source: fed_rss
+      title_regex: "(?i)enforcement action|approval of (the )?application"
   models:                  # prices: paid tier USD per 1M tokens, for cost estimates only
     - name: gemini-3.5-flash-lite
       daily_request_limit: 300

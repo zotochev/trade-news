@@ -14,7 +14,7 @@ items + the new cursor. The pipeline stores both in one transaction.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Protocol
 
@@ -35,6 +35,8 @@ class RawItem:
 class Batch:
     items: list[RawItem]
     cursor: dict[str, Any] | None = None
+    # rows for the rate_expectations table (CME FedWatch snapshots), stored as is
+    rate_expectations: list[dict[str, Any]] = field(default_factory=list)
 
 
 class Getter(Protocol):

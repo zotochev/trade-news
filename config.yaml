@@ -65,6 +65,15 @@ sources:
     interval_seconds: 300
     params: {max_age_hours: 6}
 
+  # CME FedWatch, no key (unofficial cme-fedwatch package). Settlements change once per
+  # business day; each new one is stored in rate_expectations. A news item is created when an
+  # outcome of one of the nearest `meetings_ahead` meetings moves by >= min_shift_pp points.
+  cme_fedwatch:
+    interval_seconds: 3600
+    params:
+      meetings_ahead: 3
+      min_shift_pp: 10
+
   # Central bank RSS, no key. Each feed returns weeks of history; entries older than
   # max_age_hours are stored but never annotated. Override the feed list with `feeds: [...]`.
   fed_rss:

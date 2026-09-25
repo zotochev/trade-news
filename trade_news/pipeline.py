@@ -14,8 +14,14 @@ import structlog
 
 from trade_news.collectors.base import Batch, CollectorSpec, Context, RawItem
 from trade_news.config import Config
-from trade_news.db.engine import insert_ignore
-from trade_news.db.schema import collector_runs, collector_state, items, raw_items
+from trade_news.db.engine import insert_ignore, insert_ignore_many
+from trade_news.db.schema import (
+    collector_runs,
+    collector_state,
+    items,
+    rate_expectations,
+    raw_items,
+)
 from trade_news.dedup import content_hash, find_duplicate, normalize_title, normalize_url, sha256
 from trade_news.http import RateLimiter, make_getter
 
@@ -31,6 +37,7 @@ class IngestStats:
     inserted: int = 0  # new raw rows (new items + new revisions)
     seen_before: int = 0  # exact same content already stored or repeated within the batch
     dedup_merged: int = 0  # new items attached to an existing group
+    snapshots: int = 0  # new rate_expectations rows
 
 
 def utcnow() -> datetime:
@@ -75,6 +82,15 @@ def ingest(
         stats.inserted += 1
         if _upsert_item(conn, spec, it, raw_id, fetched_at, cfg):
             stats.dedup_merged += 1
+    stats.snapshots = insert_ignore_many(
+        conn,
+        rate_expectations,
+        batch.rate_expectations,
+        "central_bank",
+        "meeting_date",
+        "snapshot_at",
+        "outcome",
+    )
     if batch.cursor is not None:
         _save_cursor(conn, spec.name, batch.cursor)
     return stats

@@ -90,6 +90,23 @@ sources:
         - {id: PAYEMS, name: US nonfarm payrolls}
         - {id: UNRATE, name: US unemployment rate}
 
+  # Economic calendar: ForexFactory weekly JSON (no key, no actual values) + actuals of US data
+  # computed from FRED. Titles must match ForexFactory exactly: high-impact USD events without
+  # a mapping are logged as ff_unmapped_usd_event. calc: level | diff | mom_pct | yoy_pct.
+  ff_calendar:
+    interval_seconds: 1800
+    params:
+      min_impact: Medium          # Low | Medium | High: stored in econ_events
+      release_window_hours: 12    # stop waiting for the FRED value after this
+      fred_actuals:
+        - {title: "CPI m/m", series: CPIAUCSL, calc: mom_pct, decimals: 1}
+        - {title: "Core CPI m/m", series: CPILFESL, calc: mom_pct, decimals: 1}
+        - {title: "CPI y/y", series: CPIAUCNS, calc: yoy_pct, decimals: 1}
+        - {title: "Core PCE Price Index m/m", series: PCEPILFE, calc: mom_pct, decimals: 1}
+        - {title: "Non-Farm Employment Change", series: PAYEMS, calc: diff, decimals: 0}
+        - {title: "Unemployment Rate", series: UNRATE, calc: level, decimals: 1}
+        - {title: "Unemployment Claims", series: ICSA, calc: level, scale: 0.001, decimals: 0}
+
   # Central bank RSS, no key. Each feed returns weeks of history; entries older than
   # max_age_hours are stored but never annotated. Override the feed list with `feeds: [...]`.
   fed_rss:

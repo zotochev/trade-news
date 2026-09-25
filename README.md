@@ -56,6 +56,8 @@ uv run trade-news stats --hours 24
 |---|---|
 | `SEC_USER_AGENT` | Ключ не нужен. SEC требует User-Agent вида `Name email@domain` ([fair access](https://www.sec.gov/os/accessing-edgar-data)) |
 | `FINNHUB_API_KEY` | Бесплатная регистрация на https://finnhub.io/register, ключ появится в дашборде |
+| `MARKETAUX_API_KEY` | https://www.marketaux.com/register (бесплатно 100 запросов в сутки) |
+| `FRED_API_KEY` | Аккаунт на https://fredaccount.stlouisfed.org, ключ на https://fredaccount.stlouisfed.org/apikeys. Нужен FRED и календарю |
 | `GEMINI_API_KEY` | https://aistudio.google.com/app/apikey (нужен с этапа 3) |
 | `TELEGRAM_BOT_TOKEN` | @BotFather → `/newbot`. Нужен **отдельный** бот, см. раздел Telegram |
 | `TELEGRAM_CHAT_ID` | Ваш chat id (владелец). Его можно узнать у @userinfobot |

@@ -18,6 +18,7 @@ from trade_news.db.engine import insert_ignore, insert_ignore_many
 from trade_news.db.schema import (
     collector_runs,
     collector_state,
+    econ_events,
     items,
     macro_observations,
     rate_expectations,
@@ -28,13 +29,15 @@ from trade_news.http import RateLimiter, make_getter
 
 log = structlog.get_logger()
 
-# Tables a collector may fill through Batch.rows: existing rows (same key) are left as is.
+# Tables a collector may fill through Batch.rows: existing rows (same key) are left as is;
+# a table without key columns is append-only.
 ROW_TABLES = {
     "rate_expectations": (
         rate_expectations,
         ("central_bank", "meeting_date", "snapshot_at", "outcome"),
     ),
     "macro_observations": (macro_observations, ("series_id", "obs_date")),
+    "econ_events": (econ_events, ()),
 }
 
 # SQLite has a single writer anyway, and dedup must see items written by other sources.
@@ -94,7 +97,13 @@ def ingest(
             stats.dedup_merged += 1
     for name, rows in batch.rows.items():
         table, conflict_cols = ROW_TABLES[name]
-        stats.rows += insert_ignore_many(conn, table, rows, *conflict_cols)
+        if not rows:
+            continue
+        if conflict_cols:
+            stats.rows += insert_ignore_many(conn, table, rows, *conflict_cols)
+        else:  # snapshot tables: the collector only sends changed rows
+            conn.execute(table.insert(), rows)
+            stats.rows += len(rows)
     if batch.cursor is not None:
         _save_cursor(conn, spec.name, batch.cursor)
     return stats

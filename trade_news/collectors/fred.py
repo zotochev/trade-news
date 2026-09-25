@@ -22,7 +22,7 @@ from trade_news.collectors.base import Batch, Context, RawItem, collector
 URL = "https://api.stlouisfed.org/fred/series/observations"
 
 
-def _observations(ctx: Context, series_id: str, start: date) -> list[tuple[date, float]]:
+def observations(ctx: Context, series_id: str, start: date) -> list[tuple[date, float]]:
     params = {
         "series_id": series_id,
         "api_key": ctx.secrets["FRED_API_KEY"],
@@ -78,7 +78,7 @@ def fetch(ctx: Context, cursor: dict | None) -> Batch:
         last = cursor.get(sid)  # {"date": ..., "value": ...} of the newest stored observation
         start = date.fromisoformat(last["date"]) if last else now.date() - lookback
         obs = [
-            o for o in _observations(ctx, sid, start) if not last or o[0].isoformat() > last["date"]
+            o for o in observations(ctx, sid, start) if not last or o[0].isoformat() > last["date"]
         ]
         rows += [
             {"series_id": sid, "obs_date": d, "value": v, "source": "fred", "fetched_at": now}

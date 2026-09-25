@@ -68,6 +68,7 @@ def news_item(conn, item_id: int) -> dict | None:
             annotations.c.cost_estimate,
             annotations.c.prompt_version,
             raw_items.c.url.label("raw_url"),
+            raw_items.c.raw_json,
         )
         .outerjoin(annotations, sa.and_(annotations.c.item_id == items.c.id, current_annotation()))
         .join(raw_items, raw_items.c.id == items.c.raw_item_id)

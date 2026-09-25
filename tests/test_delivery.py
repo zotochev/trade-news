@@ -150,7 +150,7 @@ def test_sends_to_owner_and_subscribers_once(world):
     assert (stats.candidates, stats.sent) == (2, 4)  # 2 items (neutral one filtered) × 2 chats
     assert len(tg.to(OWNER)) == 2 and len(tg.to(ALICE)) == 2
     aapl = next(t for t in tg.to(OWNER) if "AAPL" in t)
-    assert aapl.startswith("<b>AAPL ▲</b> · важность 4/5")
+    assert aapl.startswith("📈 Отчётность · <b>AAPL ▲</b> · важность 4/5")
     assert "&lt;важно&gt;" in aapl  # summary is escaped for HTML
     again = run_delivery(world, tg, OWNER, lambda: NOW + timedelta(minutes=2))
     assert again.sent == 0 and len(tg.sent) == 4
@@ -227,7 +227,7 @@ def test_format_item_only_links_http():
         "raw_url": "javascript:alert(1)",
     }
     text = format_item(item)
-    assert "javascript" not in text and "Источник: sec_edgar" in text
+    assert "javascript" not in text and "Источник: SEC EDGAR" in text
     assert "Также: акции в целом ▲ 3" in text
 
 
@@ -248,3 +248,68 @@ def test_admin_rules_preview_and_save(admin, engine):  # noqa: F811
     assert saved.enabled and saved.min_importance == 4 and saved.watchlist == ["AAPL", "NVDA"]
     bad = admin.post("/delivery/rules", data=form | {"max_per_hour": "999", "action": "save"})
     assert "не сохранены" in bad.text
+
+
+def test_priority_sources_skip_thresholds():
+    rules = DeliveryRules(min_importance=5)
+    weak = [link(importance=1, direction="neutral")]
+    assert passes(rules, weak, "macro", "ff_calendar")
+    assert passes(rules, weak, "rate_decision", "fed_rss")
+    assert not passes(rules, weak, "macro", "finnhub_market_news")
+    assert not passes(DeliveryRules(min_importance=5, always_sources=[]), weak, "macro", "fred")
+
+
+def test_format_calendar_release():
+    item = {
+        "source": "ff_calendar",
+        "payload_json": {"summary": "Инфляция выше прогноза", "event_type": "macro"},
+        "raw_json": {"actual": 0.4, "forecast": "0.3%", "previous": "0.2%"},
+        "links": [link(symbol="USD", asset_class="fx", importance=4)],
+        "relevance": {"relevance_type": "immediate", "relevant_from": NOW},
+        "raw_url": "https://fred.stlouisfed.org/series/CPIAUCSL",
+    }
+    text = format_item(item)
+    assert text.startswith("📊 Макроданные · <b>USD ▲</b> · важность 4/5\nИнфляция выше прогноза")
+    assert "Факт 0.4% · прогноз 0.3% · пред. 0.2% · сюрприз +0.1%" in text
+    assert "Когда" not in text  # "immediate" would only repeat the message time
+    assert text.endswith(
+        'Источник: <a href="https://fred.stlouisfed.org/series/CPIAUCSL">Календарь + FRED</a>'
+    )
+
+
+def test_format_fedwatch_and_scheduled_when():
+    item = {
+        "source": "cme_fedwatch",
+        "payload_json": {"summary": "Рынок больше ждёт повышения", "event_type": "rate_decision"},
+        "raw_json": {
+            "target": "3.75%-4.00%",
+            "shifts": [
+                {"meeting": "2026-10-28", "outcome": "4.00%-4.25%", "before": 55.4, "after": 70.9}
+            ],
+        },
+        "links": [link(symbol=None, scope="market_wide", asset_class="rates", importance=3)],
+        "relevance": {
+            "relevance_type": "scheduled",
+            "relevant_from": NOW.replace(month=10, day=28),
+            "date_precision": "day",
+        },
+    }
+    text = format_item(item)
+    assert text.startswith("🏦 Ожидания по ставке ФРС · <b>ставки в целом ▲</b>")
+    assert "Заседание 28.10: повышение на 25 б.п. 55.4% → 70.9%" in text
+    assert "Когда: событие · 28.10.2026" in text
+
+
+def test_format_insider():
+    item = {
+        "source": "sec_edgar",
+        "payload_json": {"summary": "Директор купил акции", "event_type": "insider"},
+        "raw_json": {
+            "form4": {"roles": ["Director"], "owners": ["DOE JOHN"]},
+            "significance": "open-market purchase $7.5M",
+        },
+        "links": [link(importance=4)],
+    }
+    text = format_item(item)
+    assert text.startswith("💼 Инсайдер")
+    assert "покупка на рынке $7.5M · Director DOE JOHN" in text

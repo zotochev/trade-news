@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 
 from trade_news import views
 from trade_news.db.engine import insert_ignore
-from trade_news.db.schema import annotations, deliveries, settings
+from trade_news.db.schema import annotations, deliveries, items, settings
 from trade_news.http import RateLimiter
 from trade_news.telegram import subscribers as subs
 from trade_news.telegram.api import Api, TelegramError
@@ -42,6 +42,7 @@ MATERIAL_EVENTS = [
     "insider",
 ]  # fmt: skip
 MAX_ATTEMPTS = 5
+ALWAYS_SOURCES = ["ff_calendar", "cme_fedwatch", "fred"]
 
 
 class DeliveryRules(BaseModel):
@@ -54,6 +55,11 @@ class DeliveryRules(BaseModel):
     watchlist_min_importance: int = Field(default=3, ge=1, le=5)
     max_per_hour: int = Field(default=6, ge=1, le=60)  # per chat; the rest waits
     max_age_hours: float = Field(default=6, gt=0, le=72)  # older news is never sent
+    # Structured signals are rare and already filtered by the collector's own thresholds
+    # (a release with an actual, a big FedWatch or yield move): they skip the importance and
+    # direction thresholds and go first.
+    always_sources: list[str] = Field(default_factory=lambda: list(ALWAYS_SOURCES))
+    always_event_types: list[str] = Field(default_factory=lambda: ["rate_decision"])
 
 
 def load_rules(conn: sa.Connection) -> DeliveryRules:
@@ -70,7 +76,15 @@ def save_rules(conn: sa.Connection, rules: DeliveryRules, now: datetime) -> None
         conn.execute(settings.insert().values(key=SETTINGS_KEY, value=value, updated_at=now))
 
 
-def passes(rules: DeliveryRules, links: list[dict], event_type: str | None) -> bool:
+def is_priority(rules: DeliveryRules, source: str | None, event_type: str | None) -> bool:
+    return source in rules.always_sources or event_type in rules.always_event_types
+
+
+def passes(
+    rules: DeliveryRules, links: list[dict], event_type: str | None, source: str | None = None
+) -> bool:
+    if is_priority(rules, source, event_type):
+        return True
     watch = {s.upper() for s in rules.watchlist}
     if any(
         (link.get("symbol") or "").upper() in watch
@@ -94,15 +108,19 @@ def passes(rules: DeliveryRules, links: list[dict], event_type: str | None) -> b
 def matching_items(
     conn: sa.Connection, rules: DeliveryRules, since: datetime
 ) -> tuple[list[int], int]:
-    """(ids of items annotated since `since` that pass the rules, oldest first; total annotated)."""
+    """(ids of items annotated since `since` that pass the rules, priority signals first, then
+    oldest first; total annotated)."""
     rows = conn.execute(
-        sa.select(annotations.c.item_id, views.EVENT_TYPE.label("event_type"))
+        sa.select(annotations.c.item_id, views.EVENT_TYPE.label("event_type"), items.c.source)
+        .join(items, items.c.id == annotations.c.item_id)
         .where(views.current_annotation(), annotations.c.created_at >= since)
         .order_by(annotations.c.created_at)
     ).all()
     links = views.links_by_item(conn, [r.item_id for r in rows])
-    ok = [r.item_id for r in rows if passes(rules, links.get(r.item_id, []), r.event_type)]
-    return ok, len(rows)
+    ok = [r for r in rows if passes(rules, links.get(r.item_id, []), r.event_type, r.source)]
+    # priority signals first: the per-hour cap must not hold them behind ordinary news
+    ok.sort(key=lambda r: not is_priority(rules, r.source, r.event_type))
+    return [r.item_id for r in ok], len(rows)
 
 
 # --- sending ---------------------------------------------------------------------------

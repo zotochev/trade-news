@@ -1,14 +1,19 @@
 """Sector reference: key integrity, SIC mapping on known companies, crypto and FX labels."""
 
+from datetime import timedelta
+
 import httpx
 import pytest
 import sqlalchemy as sa
 
 from tests.conftest import NOW, news_spec
-from trade_news import asset_sectors
+from tests.test_annotation import StubLLM, payload
+from trade_news import asset_sectors, views
 from trade_news import sectors as sec
 from trade_news.annotation import assets as ref
+from trade_news.annotation.run import annotate_pending
 from trade_news.collectors.base import Batch, RawItem
+from trade_news.config import LLMConfig
 from trade_news.db.schema import assets, item_assets, items
 from trade_news.pipeline import ingest
 
@@ -199,3 +204,63 @@ def test_changed_sic_table_is_reapplied(seeded):
         conn.execute(assets.update().where(assets.c.symbol == "AAPL").values(industry="software"))
         assert asset_sectors.apply_reference(conn) == 1
     assert sector_of(seeded, "AAPL")[1] == "hardware"
+
+
+# --- an item's sectors at read time ---------------------------------------------------
+
+
+def link(cls, symbol, importance, primary):
+    return {
+        "asset_class": cls, "scope": "specific", "symbol_or_name": symbol, "group_label": None,
+        "direction": "bullish", "importance": importance, "is_primary": primary,
+        "confidence": 0.8,
+    }  # fmt: skip
+
+
+def test_item_sectors_union_and_filter(seeded, cfg):
+    titles = {"chips": "a", "yen": "b", "tech": "c"}
+    with seeded.begin() as conn:
+        ingest(
+            conn,
+            news_spec("n", title_dedup=False),
+            Batch([RawItem(k, f"{k} story {v}", "b", None, NOW, {}) for k, v in titles.items()]),
+            cfg,
+            NOW,
+        )
+        ids = dict(conn.execute(sa.select(items.c.source_item_id, items.c.id)).all())
+    answers = {
+        # LLM industry + the main asset's industry
+        ids["chips"]: {"sectors": ["semiconductors"], "assets": [link("equity", "AAPL", 3, True)]},
+        # FX labels from the main pair; a minor non-primary pair doesn't count
+        ids["yen"]: {
+            "sectors": [],
+            "assets": [link("fx", "USD/JPY", 4, False), link("fx", "EUR/USD", 2, False)],
+        },
+        # bare sector from the LLM; a passing mention of MSFT doesn't add software
+        ids["tech"]: {"sectors": ["technology"], "assets": [link("equity", "MSFT", 2, False)]},
+    }
+    llm = StubLLM(lambda its: [payload(i.id, **answers.get(i.id, {})) for i in its])
+    annotate_pending(seeded, llm, LLMConfig(batch_size=5), NOW + timedelta(minutes=1))
+    fill(seeded, FakeSEC())  # AAPL → hardware, filled after annotation: still counts
+
+    with seeded.connect() as conn:
+        got = views.sectors_by_item(conn, list(ids.values()))
+        assert got[ids["chips"]] == [("technology", "semiconductors"), ("technology", "hardware")]
+        assert got[ids["yen"]] == [("fx", "fx_majors"), ("fx", "fx_safe_haven")]
+        assert got[ids["tech"]] == [("technology", None)]
+
+        def matching(key):
+            q = sa.select(items.c.source_item_id).where(
+                items.c.source == "n", views.sector_filter(key)
+            )
+            return set(conn.execute(q).scalars())
+
+        assert matching("technology") == {"chips", "tech"}
+        assert matching("hardware") == {"chips"}
+        assert matching("semiconductors") == {"chips"}
+        assert matching("software") == set()
+        assert matching("fx") == {"yen"}
+        assert matching("fx_safe_haven") == {"yen"}
+        assert matching("fx_majors") == {"yen"}
+        assert matching("fx_commodity") == set()
+        assert matching("bogus") == set()

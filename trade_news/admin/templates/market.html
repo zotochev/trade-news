@@ -26,6 +26,12 @@ background: color-mix(in oklab, {{ 'var(--bull)' if cell.tone > 0 else 'var(--be
 .chart-tip { position: absolute; pointer-events: none; background: var(--ink); color: #fff; font-size: 12px; padding: 6px 9px; border-radius: 6px; white-space: nowrap; display: none; line-height: 1.5; }
 .chart-tip i { display: inline-block; width: 10px; height: 2px; vertical-align: middle; margin-right: 5px; }
 .fw-row { display: grid; grid-template-columns: 110px 1fr 54px 56px; gap: 8px; align-items: center; font-size: 12px; }
+.lgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.lgroup { border: 1px solid var(--line-2); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.lhead { display: flex; justify-content: space-between; align-items: baseline; font-weight: 500; font-size: 13px; padding-bottom: 4px; border-bottom: 1px solid var(--line-2); }
+.lrow { display: grid; grid-template-columns: 1fr 28px 64px 44px; gap: 6px; align-items: baseline; font-size: 13px; }
+.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .cols-2 { grid-template-columns: minmax(0, 1fr); } }
 .up { color: var(--bull); } .down { color: var(--bear); }
 </style>
 
@@ -72,27 +78,28 @@ background: color-mix(in oklab, {{ 'var(--bull)' if cell.tone > 0 else 'var(--be
   {% else %}<p class="empty">Пока нет размеченных новостей с отраслями.</p>{% endif %}
 </section>
 
-<div class="grid cols-3">
-  <section class="card" aria-labelledby="att-h">
-    <div class="card-head"><h2 id="att-h">Лидеры внимания</h2><span class="small muted">24 ч</span></div>
-    <table>
-      <thead><tr><th>Актив</th><th class="num">24 ч</th><th>Тон</th><th class="num" title="Во сколько раз чаще обычного дня за прошлую неделю">к норме</th></tr></thead>
-      <tbody>
-      {% for ld in leaders %}
-        <tr>
-          <td><a class="mono" href="/news?q={{ ld.symbol | urlencode }}" style="font-weight: 500;">{{ ld.symbol }}</a>
-            <div class="small muted ellipsis" style="max-width: 190px;">{{ sector_name(ld.industry or ld.sector) if (ld.industry or ld.sector) else (ld.name or '') }}</div></td>
-          <td class="num">{{ ld.last24.count }}</td>
-          <td class="small mono">{% if ld.last24.bull %}<span class="up">▲{{ ld.last24.bull }}</span> {% endif %}{% if ld.last24.bear %}<span class="down">▼{{ ld.last24.bear }}</span>{% endif %}</td>
-          <td class="num {{ 'up' if ld.ratio and ld.ratio >= 2 }}" style="{{ 'font-weight: 600;' if ld.ratio and ld.ratio >= 2 }}">{{ '×%.1f' % ld.ratio if ld.ratio is not none else 'новый' }}</td>
-        </tr>
-      {% else %}
-        <tr><td colspan="4" class="empty">За сутки нет новостей с активами</td></tr>
+<section class="card" aria-labelledby="att-h">
+  <div class="card-head"><h2 id="att-h">Лидеры внимания</h2><span class="small muted">24 ч · до 3 активов на сектор · «к норме» — во сколько раз чаще обычного дня недели</span></div>
+  {% if leader_groups %}
+  <div class="lgrid">
+    {% for g in leader_groups %}
+    <div class="lgroup">
+      <div class="lhead">{% if not g.key.startswith('class:') %}<a href="/news?sector={{ g.key }}" style="color: inherit;">{{ g.name }}</a>{% else %}{{ g.name }}{% endif %}<span class="mono small muted">{{ g.count }}</span></div>
+      {% for ld in g.leaders %}
+      <div class="lrow">
+        <a class="mono" href="/news?q={{ ld.symbol | urlencode }}" style="font-weight: 500;" title="{{ ld.name or '' }}{{ ' · ' ~ sector_name(ld.industry) if ld.industry }}">{{ ld.symbol }}</a>
+        <span class="num">{{ ld.last24.count }}</span>
+        <span class="small mono">{% if ld.last24.bull %}<span class="up">▲{{ ld.last24.bull }}</span> {% endif %}{% if ld.last24.bear %}<span class="down">▼{{ ld.last24.bear }}</span>{% endif %}</span>
+        <span class="num small {{ 'up' if ld.ratio and ld.ratio >= 2 else 'muted' }}" style="{{ 'font-weight: 600;' if ld.ratio and ld.ratio >= 2 }}">{{ '×%.1f' % ld.ratio if ld.ratio is not none else 'новый' }}</span>
+      </div>
       {% endfor %}
-      </tbody>
-    </table>
-  </section>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}<p class="empty">За сутки нет новостей с активами</p>{% endif %}
+</section>
 
+<div class="grid cols-3">
   <section class="card span-2" aria-labelledby="y-h">
     <div class="card-head"><h2 id="y-h">Доходности казначейских облигаций США</h2><span class="small muted">FRED, дневные, %</span></div>
     <div class="kpis">
@@ -133,9 +140,7 @@ background: color-mix(in oklab, {{ 'var(--bull)' if cell.tone > 0 else 'var(--be
     <script type="application/json" id="ydata">{{ chart.points | tojson }}</script>
     {% else %}<p class="empty">Нет наблюдений FRED.</p>{% endif %}
   </section>
-</div>
 
-<div class="grid cols-3">
   <section class="card" aria-labelledby="fw-h">
     <div class="card-head"><h2 id="fw-h">Ожидания по ставке ФРС</h2><span class="small muted">CME FedWatch{% if macro.fedwatch_at %} · {{ macro.fedwatch_at | dt('%d.%m') }}{% endif %}</span></div>
     {% for m in macro.fedwatch %}
@@ -151,6 +156,9 @@ background: color-mix(in oklab, {{ 'var(--bull)' if cell.tone > 0 else 'var(--be
     {% if macro.fedwatch %}<p class="small muted" style="margin: 0;">Справа — изменение к прошлому снимку, п.п.</p>{% endif %}
   </section>
 
+</div>
+
+<div class="grid cols-2">
   <section class="card" aria-labelledby="cal-h">
     <div class="card-head"><h2 id="cal-h">Календарь: важное впереди</h2><span class="small muted">7 дней</span></div>
     <table>

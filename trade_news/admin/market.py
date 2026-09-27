@@ -127,6 +127,7 @@ class Leader:
     asset_id: int
     symbol: str
     name: str | None
+    asset_class: str
     sector: str | None
     industry: str | None
     last24: Cell = field(default_factory=Cell)
@@ -134,14 +135,45 @@ class Leader:
     ratio: float | None = None  # last24 / usual daily count; None: no history yet
 
 
-def attention(conn, now: datetime, limit: int = 15) -> list[Leader]:
+CLASS_RU = {
+    "equity": "Акции без отрасли", "fx": "Валюты", "crypto": "Крипта", "commodity": "Сырьё",
+    "index": "Индексы", "rates": "Ставки и облигации", "macro": "Макро",
+}  # fmt: skip
+
+
+@dataclass
+class LeaderGroup:
+    key: str  # sector key, or "class:<asset_class>" for assets without a sector
+    name: str
+    count: int  # items in 24 h over all assets of the group, not only the shown ones
+    leaders: list[Leader]
+
+
+def attention_groups(conn, now: datetime, per_group: int = 3) -> list[LeaderGroup]:
+    """Top assets of every sector (assets without one: by asset class), busiest group first."""
+    groups: dict[str, list[Leader]] = defaultdict(list)
+    for ld in attention(conn, now, limit=None):
+        groups[ld.sector or f"class:{ld.asset_class}"].append(ld)
+    out = [
+        LeaderGroup(
+            key,
+            sectors.name_ru(key) if sectors.expand(key) else CLASS_RU.get(key[6:], key[6:]),
+            sum(ld.last24.count for ld in lds),
+            lds[:per_group],
+        )
+        for key, lds in groups.items()
+    ]
+    return sorted(out, key=lambda g: (-g.count, g.name))
+
+
+def attention(conn, now: datetime, limit: int | None = 15) -> list[Leader]:
     week_ago = now - timedelta(days=DAYS)
     day_ago = now - timedelta(hours=24)
     rows = conn.execute(
         sa.select(
             item_assets.c.item_id, item_assets.c.asset_id, item_assets.c.direction,
             item_assets.c.importance, items.c.published_at, assets.c.symbol, assets.c.name,
-            assets.c.sector, assets.c.industry,
+            assets.c.asset_class, assets.c.sector, assets.c.industry,
         )
         .join(items, items.c.id == item_assets.c.item_id)
         .join(assets, assets.c.id == item_assets.c.asset_id)
@@ -160,7 +192,8 @@ def attention(conn, now: datetime, limit: int = 15) -> list[Leader]:
             continue
         seen.add((r.item_id, r.asset_id))
         ld = leaders.setdefault(
-            r.asset_id, Leader(r.asset_id, r.symbol, r.name, r.sector, r.industry)
+            r.asset_id,
+            Leader(r.asset_id, r.symbol, r.name, r.asset_class, r.sector, r.industry),
         )
         if r.published_at >= day_ago:
             ld.last24.add({"direction": r.direction, "importance": r.importance})

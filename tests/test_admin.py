@@ -143,6 +143,7 @@ def test_market_page(admin, engine):
     assert "Нет наблюдений FRED" in empty and "Снимков FedWatch ещё нет" in empty
     assert 'href="/news?sector=hardware"' in empty  # the Apple item is on the sector map
     assert '<a class="mono" href="/news?q=AAPL"' in empty  # and among the attention leaders
+    assert "Акции без отрасли" in empty  # AAPL has no sector filled in this test
     day = NOW.date()
     with engine.begin() as conn:
         conn.execute(

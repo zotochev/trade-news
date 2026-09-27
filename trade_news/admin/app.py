@@ -150,7 +150,7 @@ def create_app(deps: AdminDeps) -> FastAPI:
         with deps.engine.connect() as conn:
             days, rows = market.sector_map(conn, now)
             macro = market.macro(conn, now)
-            leaders = market.attention(conn, now)
+            leader_groups = market.attention_groups(conn, now)
             insiders = market.insiders(conn, now)
         return render(
             request,
@@ -158,7 +158,7 @@ def create_app(deps: AdminDeps) -> FastAPI:
             "market",
             days=days,
             sectors_rows=rows,
-            leaders=leaders,
+            leader_groups=leader_groups,
             macro=macro,
             chart=market.yield_chart(macro.yields),
             insiders=insiders,

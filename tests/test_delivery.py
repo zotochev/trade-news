@@ -314,6 +314,18 @@ def test_format_fedwatch_and_scheduled_when():
     assert "Когда: событие · 28.10.2026" in text
 
 
+def test_format_sector_hashtags():
+    item = {
+        "source": "finnhub_market_news",
+        "payload_json": {"summary": "Nvidia растёт", "event_type": "other"},
+        "links": [link(importance=4)],
+        "sectors": [("technology", "semiconductors"), ("technology", "hardware")],
+    }
+    assert "\n#полупроводники #технологии #электроника\nИсточник: Finnhub" in format_item(item)
+    ((_, digest),) = format_digest([item | {"id": 1}, item | {"id": 2, "sectors": []}])
+    assert digest.count("#полупроводники") == 1
+
+
 def test_format_insider():
     item = {
         "source": "sec_edgar",

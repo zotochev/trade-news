@@ -5,6 +5,7 @@ and by delivery.
     Инфляция в США за август выше прогноза
     Факт 0.4% · прогноз 0.3% · пред. 0.2% · сюрприз +0.1%
     Также: US10Y ▼ 3 · акции США ●
+    #полупроводники #технологии
     Источник: Календарь + FRED
 
 The first line tells the kind of news (by source, else by the LLM's event_type). Structured
@@ -17,6 +18,7 @@ from __future__ import annotations
 import html
 from datetime import date, datetime
 
+from trade_news import sectors
 from trade_news.collectors.ff_calendar import parse_value
 
 ARROW = {"bullish": "▲", "bearish": "▼", "neutral": "●"}
@@ -160,6 +162,8 @@ def format_item(item: dict) -> str:
         lines.append("Также: " + " · ".join(others))
     if when := _when(item.get("relevance")):
         lines.append(f"Когда: {when}")
+    if tags := sectors.hashtags(item.get("sectors") or []):
+        lines.append(html.escape(tags))
     lines.append(f"Источник: {_source_link(item)}")
     text = "\n".join(lines)
     return text if len(text) <= MAX_LEN else text[: MAX_LEN - 1] + "…"
@@ -208,6 +212,8 @@ def format_digest(items: list[dict]) -> list[tuple[list[int], str]]:
         lines = [_head(item), f"{summary} ({_source_link(item)})"]
         if facts := _facts(source, raw):
             lines.append(html.escape(facts))
+        if tags := sectors.hashtags(item.get("sectors") or []):
+            lines.append(html.escape(tags))
         block = "\n".join(lines)
         blocks.append((item["id"], block if len(block) <= MAX_LEN // 2 else block[: MAX_LEN // 2]))
 

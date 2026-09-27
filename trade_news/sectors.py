@@ -99,6 +99,41 @@ _NAMES = {s.key: s.name_ru for s in SECTORS} | {
 }
 
 
+# Telegram hashtags: one word each (letters, digits, underscore), short enough to scan.
+HASHTAGS: dict[str, str] = {
+    "technology": "технологии", "semiconductors": "полупроводники", "software": "софт",
+    "hardware": "электроника", "it_services": "IT_услуги",
+    "communication": "связь_и_медиа", "internet": "интернет", "media": "медиа",
+    "telecom": "телеком",
+    "consumer_cyclical": "потребительский_цикличный", "autos": "автомобили", "retail": "ритейл",
+    "travel_leisure": "путешествия", "apparel_home": "одежда_и_роскошь",
+    "consumer_defensive": "потребительский_защитный", "food_beverage": "продукты",
+    "household_tobacco": "бытовые_товары", "grocery_retail": "продуктовый_ритейл",
+    "healthcare": "здравоохранение", "pharma": "фарма", "biotech": "биотех",
+    "medtech": "медтехника", "health_services": "медстрахование",
+    "financials": "финансы", "banks": "банки", "insurance": "страхование",
+    "capital_markets": "брокеры_и_биржи", "payments": "платежи",
+    "industrials": "промышленность", "aerospace_defense": "оборонка",
+    "machinery": "машиностроение", "transport": "транспорт", "construction": "строительство",
+    "energy": "энергетика", "oil_gas": "нефть_и_газ", "renewables": "зелёная_энергетика",
+    "materials": "материалы", "chemicals": "химия", "metals_mining": "металлы",
+    "building_packaging": "стройматериалы",
+    "real_estate": "недвижимость", "reit": "REIT", "development": "девелопмент",
+    "utilities": "коммунальные_услуги",
+    "crypto": "крипта", "cryptocurrencies": "криптовалюты", "smart_contracts": "смарт_контракты",
+    "defi": "DeFi", "stablecoins": "стейблкоины", "crypto_other": "альткоины",
+    "fx": "валюты", "fx_majors": "мажоры", "fx_emerging": "валюты_EM",
+    "fx_commodity": "сырьевые_валюты", "fx_safe_haven": "защитные_валюты",
+}  # fmt: skip
+
+
+def hashtags(pairs: list[tuple[str, str | None]], limit: int = 4) -> str:
+    """[('technology', 'semiconductors')] → '#полупроводники #технологии': each industry then
+    its sector, without repeats, at most `limit` tags."""
+    keys = [k for s, i in pairs for k in (i, s) if k]
+    return " ".join(f"#{HASHTAGS[k]}" for k in list(dict.fromkeys(keys))[:limit])
+
+
 def all_keys() -> list[str]:
     """Every sector and industry key, sector first then its industries (the LLM enum)."""
     return [k for s in SECTORS for k in (s.key, *(i.key for i in s.industries))]

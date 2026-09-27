@@ -1,5 +1,6 @@
 """Sector reference: key integrity, SIC mapping on known companies, crypto and FX labels."""
 
+import re
 from datetime import timedelta
 
 import httpx
@@ -23,6 +24,18 @@ def test_keys_unique_and_named():
     assert len(keys) == len(set(keys))
     assert all(sec.name_ru(k) for k in keys)
     assert all(s.cycle in (None, *sec.CYCLES) for s in sec.SECTORS)
+
+
+def test_hashtags():
+    assert set(sec.HASHTAGS) == set(sec.all_keys())
+    assert all(re.fullmatch(r"\w+", tag) for tag in sec.HASHTAGS.values())
+    assert len(set(sec.HASHTAGS.values())) == len(sec.HASHTAGS)
+    pairs = [("technology", "semiconductors"), ("technology", None), ("utilities", None)]
+    assert sec.hashtags(pairs) == "#полупроводники #технологии #коммунальные_услуги"
+    assert sec.hashtags([("fx", "fx_majors"), ("fx", "fx_safe_haven")], limit=2) == (
+        "#мажоры #валюты"
+    )
+    assert sec.hashtags([]) == ""
 
 
 def test_every_table_key_is_known():

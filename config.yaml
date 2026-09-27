@@ -18,6 +18,13 @@ sectors:                 # equity sector/industry from SEC SIC codes, for stocks
   interval_minutes: 10
   batch: 100             # SEC requests per run (shares rate_limits.sec with sec_edgar)
 
+background_digest:       # "Фон рынка": news below the delivery thresholds, by industry
+  enabled: true
+  hours_utc: [13, 17, 21]  # before the US open, mid-session, after the close
+  min_importance: 2        # importance 1 is noise (routine filings)
+  max_assets_per_sector: 5
+  max_window_hours: 16     # the first digest (or one after downtime) looks back at most this far
+
 # Shared limiters. Several sources may point at one key (e.g. all SEC hosts share one quota).
 # Values are deliberately below documented limits.
 rate_limits:

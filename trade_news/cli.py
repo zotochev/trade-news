@@ -12,6 +12,7 @@ review              print a random sample of annotations for manual checking
 query ...           the spec's target queries (section 3)
 cleanup             delete data older than the retention settings
 sectors [--all]     fill sectors/industries of assets (SEC SIC codes for equities in news)
+background          send the "Фон рынка" digest now (--dry-run: print it, send nothing)
 admin               the admin web page alone (127.0.0.1:ADMIN_PORT); `run` starts it too
 """
 
@@ -29,7 +30,7 @@ import sqlalchemy as sa
 import structlog
 from dotenv import load_dotenv
 
-from trade_news import asset_sectors, delivery, llm, queries, retention
+from trade_news import asset_sectors, background, delivery, llm, queries, retention
 from trade_news.admin import app as admin_app
 from trade_news.annotation import assets as asset_ref
 from trade_news.annotation.run import annotate_pending
@@ -201,6 +202,18 @@ def cmd_run(cfg: Config) -> None:
             max_instances=1,
             coalesce=True,
         )
+        if cfg.background_digest.enabled:
+            scheduler.add_job(
+                run_background_job,
+                "cron",
+                args=(engine, tg_api, cfg),
+                hour=",".join(str(h) for h in cfg.background_digest.hours_utc),
+                minute=0,
+                id="background_digest",
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=600,
+            )
     admin_server = admin_app.start_in_thread(
         admin_app.create_app(
             admin_deps(engine, cfg, source_list, llm_client, scheduler, bot_thread)
@@ -405,6 +418,26 @@ def run_delivery_job(engine: sa.Engine, api) -> None:
         log.exception("delivery_job_failed")
 
 
+def run_background_job(engine: sa.Engine, api, cfg: Config) -> None:
+    try:
+        background.run_background(engine, api, root_chat_id(), cfg.background_digest, utcnow)
+    except Exception:
+        log.exception("background_job_failed")
+
+
+def cmd_background(cfg: Config, dry_run: bool) -> None:
+    engine = make_engine(cfg.database_url)
+    if dry_run:
+        messages, _ = background.build(engine, cfg.background_digest, utcnow())
+        print("\n\n=====\n\n".join(messages) or "(empty window)")
+        return
+    with httpx.Client(timeout=30) as client:
+        api = telegram_api(client)
+        if api is None:
+            raise SystemExit("TELEGRAM_BOT_TOKEN is not set")
+        background.run_background(engine, api, root_chat_id(), cfg.background_digest, utcnow)
+
+
 def admin_port() -> int:
     return int(os.environ.get("ADMIN_PORT") or 10000)
 
@@ -583,6 +616,8 @@ def main(argv: list[str] | None = None) -> None:
     r = sub.add_parser("review")
     r.add_argument("-n", type=int, default=20)
     sub.add_parser("cleanup")
+    bg = sub.add_parser("background")
+    bg.add_argument("--dry-run", action="store_true", help="print the digest, send nothing")
     sc = sub.add_parser("sectors")
     sc.add_argument("--all", action="store_true", help="repeat until nothing is left")
     sub.add_parser("admin")
@@ -617,6 +652,8 @@ def main(argv: list[str] | None = None) -> None:
             cmd_review(cfg, args.n)
         case "cleanup":
             cmd_cleanup(cfg)
+        case "background":
+            cmd_background(cfg, args.dry_run)
         case "sectors":
             cmd_sectors(cfg, args.all)
         case "admin":

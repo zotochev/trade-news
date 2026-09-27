@@ -64,7 +64,9 @@ def _label(link: dict) -> str:
     if link.get("scope") == "specific" and link.get("raw_symbol"):
         return link["raw_symbol"]
     if link.get("scope") == "group" and link.get("group_label"):
-        return f"{link['group_label']} ({CLASS_RU.get(link['asset_class'], link['asset_class'])})"
+        group = link["group_label"]  # since prompt v3 often a sector key: show its name
+        group = sectors.name_ru(group) if sectors.expand(group) else group
+        return f"{group} ({CLASS_RU.get(link['asset_class'], link['asset_class'])})"
     return f"{CLASS_RU.get(link['asset_class'], link['asset_class'])} в целом"
 
 

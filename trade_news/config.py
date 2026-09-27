@@ -67,6 +67,16 @@ class SectorsConfig(BaseModel):
     batch: int = Field(default=100, gt=0, description="SEC lookups per run")
 
 
+class BackgroundConfig(BaseModel):
+    """Digest of news below the delivery thresholds, by industry (trade_news.background)."""
+
+    enabled: bool = True
+    hours_utc: list[int] = Field(default_factory=lambda: [13, 17, 21])
+    min_importance: int = Field(default=2, ge=1, le=5)
+    max_assets_per_sector: int = Field(default=5, gt=0)
+    max_window_hours: float = Field(default=16, gt=0)
+
+
 class Config(BaseModel):
     database_url: str = "sqlite:///data/trade_news.db"
     dedup: DedupConfig = Field(default_factory=DedupConfig)
@@ -75,6 +85,7 @@ class Config(BaseModel):
     llm: LLMConfig = Field(default_factory=LLMConfig)
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
     sectors: SectorsConfig = Field(default_factory=SectorsConfig)
+    background_digest: BackgroundConfig = Field(default_factory=BackgroundConfig)
 
 
 def load_config(path: str | Path | None = None) -> Config:

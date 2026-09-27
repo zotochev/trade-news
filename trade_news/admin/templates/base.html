@@ -57,6 +57,9 @@ tr.clickable:hover td { background: #faf9f6; }
 .chip.bull { background: var(--bull-bg); color: var(--bull); } .chip.bear { background: var(--bear-bg); color: var(--bear); }
 .chip.neut { background: var(--neut-bg); color: var(--ink-2); } .chip.unres { background: #fff; color: var(--bear); border: 1px dashed #c98a4a; }
 .chip b { font-weight: 600; }
+.tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.tag { display: inline-flex; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink-2); font-size: 11px; white-space: nowrap; }
+a.tag:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
 .dir-bull { color: var(--bull); font-weight: 500; } .dir-bear { color: var(--bear); font-weight: 500; } .dir-neut { color: var(--muted); font-weight: 500; }
 .imp { display: inline-flex; width: 28px; height: 24px; align-items: center; justify-content: center; border-radius: 6px; font-family: var(--mono); font-weight: 500; flex-shrink: 0; }
 .imp-1 { background: #efede7; color: var(--muted); } .imp-2 { background: #e4e1d8; color: var(--ink-2); }

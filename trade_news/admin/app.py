@@ -23,7 +23,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 
-from trade_news import delivery, views
+from trade_news import delivery, sectors, views
 from trade_news.admin import data
 from trade_news.config import Config
 
@@ -81,6 +81,7 @@ DIRECTION = {
     "neutral": ("нейтрально", "●", "neut"),
 }
 TEMPLATES.env.globals.update(DIRECTION=DIRECTION)
+TEMPLATES.env.globals.update(SECTORS=sectors.SECTORS, sector_name=sectors.name_ru)
 
 
 def create_app(deps: AdminDeps) -> FastAPI:
@@ -139,6 +140,7 @@ def create_app(deps: AdminDeps) -> FastAPI:
             min_importance=min(max(min_imp, 1), 5),
             direction=p.get("direction", "") if p.get("direction") in DIRECTION else "",
             source=p.get("source", ""),
+            sector=p.get("sector", "") if sectors.expand(p.get("sector", "")) else "",
             review_only=p.get("review") == "1",
         )
 
@@ -175,6 +177,7 @@ def create_app(deps: AdminDeps) -> FastAPI:
                 "title",
                 "summary",
                 "event_type",
+                "sectors",
                 "assets",
                 "relevance",
                 "relevant_from",
@@ -191,6 +194,7 @@ def create_app(deps: AdminDeps) -> FastAPI:
                     r["title"],
                     r["summary"],
                     r["event_type"],
+                    "; ".join(sectors.name_ru(i or s) for s, i in r["sectors"]),
                     "; ".join(
                         f"{link['label']}:{link['direction'] or '-'}:{link['importance']}"
                         for link in r["links"]

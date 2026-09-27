@@ -65,7 +65,14 @@ def admin(engine, cfg):
                     "symbol_or_name": "Sierra Space",
                     "direction": "bearish",
                 }
-                out.append(payload(it.id, assets=[link], summary="<b>частная</b> компания"))
+                out.append(
+                    payload(
+                        it.id,
+                        assets=[link],
+                        summary="<b>частная</b> компания",
+                        sectors=["aerospace_defense"],
+                    )
+                )
             else:
                 out.append(payload(it.id))
         return out
@@ -115,11 +122,24 @@ def test_news_filters_detail_and_escaping(admin):
     assert "Apple отчиталась" in by_ticker and "частная" not in by_ticker
 
 
+def test_news_sector_filter_and_tags(admin):
+    html = admin.get("/news").text
+    assert '<option value="semiconductors"' in html and "технологии — все" in html
+    assert 'href="/news?sector=aerospace_defense"' in html  # a row tag filters by itself
+    space = admin.get("/news?sector=industrials").text
+    assert "частная" in space and "Apple отчиталась" not in space
+    tech = admin.get("/news?sector=hardware").text
+    assert "Apple отчиталась" in tech and "частная" not in tech
+    assert '<option value="hardware" selected' in tech
+    bogus = admin.get("/news?sector=bogus").text  # unknown key: no filter
+    assert "Apple отчиталась" in bogus and "частная" in bogus
+
+
 def test_csv_and_raw(admin, engine):
     csv = admin.get("/news.csv")
     assert csv.headers["content-type"].startswith("text/csv")
     assert csv.content.startswith(chr(0xFEFF).encode())
-    assert "AAPL:bullish:4" in csv.text
+    assert "AAPL:bullish:4" in csv.text and "авиакосмос и оборона" in csv.text
     with engine.connect() as conn:
         item_id = conn.execute(sa.select(items.c.id).where(items.c.source_item_id == "1")).scalar()
     assert admin.get(f"/news/{item_id}/raw").json()["summary"] == "Apple отчиталась лучше ожиданий"

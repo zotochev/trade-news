@@ -35,6 +35,8 @@ from trade_news.views import (
     current_annotation,
     links_by_item,
     relevance_by_item,
+    sector_filter,
+    sectors_by_item,
 )
 
 
@@ -190,6 +192,7 @@ class NewsFilter:
     min_importance: int = 1
     direction: str = ""
     source: str = ""
+    sector: str = ""  # a sector or industry key of trade_news.sectors
     review_only: bool = False
     limit: int = 100
 
@@ -220,6 +223,8 @@ def news(conn, f: NewsFilter) -> list[dict]:
         q = q.where(sa.exists().where(*link_cond))
     if f.source:
         q = q.where(items.c.source == f.source)
+    if f.sector:
+        q = q.where(sector_filter(f.sector))
     if f.review_only:
         q = q.where(
             sa.exists().where(
@@ -243,9 +248,11 @@ def news(conn, f: NewsFilter) -> list[dict]:
     rows = [dict(r._mapping) for r in conn.execute(q)]
     ids = [r["id"] for r in rows]
     links, rel = links_by_item(conn, ids), relevance_by_item(conn, ids)
+    secs = sectors_by_item(conn, ids)
     for r in rows:
         r["links"] = links.get(r["id"], [])
         r["relevance"] = rel.get(r["id"])
+        r["sectors"] = secs.get(r["id"], [])
     return rows
 
 

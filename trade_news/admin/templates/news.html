@@ -4,6 +4,9 @@
 {%- set d = DIRECTION.get(link.direction) -%}
 <span class="chip {{ 'unres' if link.unresolved else (d[2] if d else 'neut') }}" title="{{ link.asset_class }}/{{ link.scope }}">{{ link.label }}{% if d %} {{ d[1] }}{% endif %}<b>{{ link.importance }}</b></span>
 {%- endmacro %}
+{% macro tags(pairs) -%}
+<div class="tags">{% for s, i in pairs %}<a class="tag" href="/news?sector={{ i or s }}" title="{{ sector_name(s) }}">{{ sector_name(i or s) }}</a>{% endfor %}</div>
+{%- endmacro %}
 {% block content %}
 <header class="page">
   <div>
@@ -27,6 +30,14 @@
   <label class="f">Источник
     <select name="source"><option value="">Все</option>{% for s in sources %}<option {{ 'selected' if s == f.source }}>{{ s }}</option>{% endfor %}</select>
   </label>
+  <label class="f">Отрасль
+    <select name="sector"><option value="">Все</option>
+      {% for s in SECTORS %}<optgroup label="{{ s.name_ru }}">
+        <option value="{{ s.key }}" {{ 'selected' if s.key == f.sector }}>{{ s.name_ru }}{{ ' — все' if s.industries }}</option>
+        {% for i in s.industries %}<option value="{{ i.key }}" {{ 'selected' if i.key == f.sector }}>{{ i.name_ru }}</option>{% endfor %}
+      </optgroup>{% endfor %}
+    </select>
+  </label>
   <label class="check"><input type="checkbox" name="review" value="1" {{ 'checked' if f.review_only }}> Только на проверку</label>
   <button type="submit" class="primary">Показать</button>
   <a href="/news" class="small">Сбросить</a>
@@ -46,6 +57,7 @@
           <td>
             <a href="/news?{{ qs }}{{ '&' if qs }}id={{ r.id }}" style="color: inherit; font-weight: 500; line-height: 1.35;">{{ r.summary }}</a>
             <div class="small muted ellipsis" style="margin-top: 3px;">{{ r.source }} · {{ r.title }}</div>
+            {% if r.sectors %}<div style="margin-top: 5px;">{{ tags(r.sectors) }}</div>{% endif %}
           </td>
           <td><div style="display: flex; flex-wrap: wrap; gap: 4px;">{% for link in r.links %}{{ chip(link) }}{% endfor %}</div></td>
           <td class="small" style="padding-right: 16px;">
@@ -69,6 +81,13 @@
     {% if p %}<p style="margin: 0; font-size: 15px; line-height: 1.45;">{{ p.get('summary') }}</p>{% else %}<p class="muted" style="margin: 0;">Ещё не размечена.</p>{% endif %}
     <p class="small muted" style="margin: 0; line-height: 1.45;">{{ selected.title }} · {{ selected.source }} · {{ selected.published_at | dt }}</p>
     {% if selected.raw_url and selected.raw_url.startswith(('https://', 'http://')) %}<a href="{{ selected.raw_url }}" target="_blank" rel="noopener noreferrer" style="font-weight: 500;">Открыть первоисточник</a>{% endif %}
+
+    {% if selected.sectors %}
+    <div style="display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line-2);">
+      <h3>Отрасли</h3>
+      {{ tags(selected.sectors) }}
+    </div>
+    {% endif %}
 
     {% if selected.links %}
     <div style="display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line-2);">

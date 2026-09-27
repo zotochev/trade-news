@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 import sqlalchemy as sa
 import structlog
 
+from trade_news import sectors
 from trade_news.annotation import assets as asset_ref
 from trade_news.annotation.contract import (
     PROMPT_VERSION,
@@ -35,6 +36,7 @@ from trade_news.db.schema import (
     asset_resolution_queue,
     item_assets,
     item_relevance,
+    item_sectors,
     items,
     raw_items,
 )
@@ -270,3 +272,12 @@ def _persist(
             **resolve_relevance(parsed.relevance, anchor=item.published_at),
         )
     )
+    sector_rows = []
+    for key in parsed.sectors:
+        sector, industry = sectors.expand(key)  # type: ignore[misc]  # keys are validated
+        sector_rows.append(
+            {"item_id": item.id, "annotation_id": annotation_id, "sector": sector,
+             "industry": industry}
+        )  # fmt: skip
+    if sector_rows:
+        conn.execute(item_sectors.insert(), sector_rows)

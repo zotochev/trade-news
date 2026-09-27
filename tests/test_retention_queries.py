@@ -58,19 +58,9 @@ def test_cleanup_by_age_and_annotation(engine, cfg):
     with engine.begin() as conn:
         leader_1 = conn.execute(sa.select(items.c.id).where(items.c.source_item_id == "1")).scalar()
         conn.execute(item_assets.delete().where(item_assets.c.item_id == leader_1))
-        for t in ("item_relevance", "asset_resolution_queue"):
+        for t in ("item_relevance", "item_sectors", "asset_resolution_queue"):
             conn.execute(sa.text(f"delete from {t} where item_id = :i"), {"i": leader_1})
         conn.execute(annotations.delete().where(annotations.c.item_id == leader_1))
-        leader_3 = conn.execute(sa.select(items.c.id).where(items.c.source_item_id == "3")).scalar()
-        conn.execute(
-            item_sectors.insert().values(
-                item_id=leader_3,
-                annotation_id=sa.select(annotations.c.id)
-                .where(annotations.c.item_id == leader_3)
-                .scalar_subquery(),
-                sector="technology",
-            )
-        )
 
     stats = cleanup(
         engine, RetentionConfig(unannotated_days=30, annotated_days=365, logs_days=90), NOW
@@ -83,7 +73,7 @@ def test_cleanup_by_age_and_annotation(engine, cfg):
 
     stats = cleanup(engine, RetentionConfig(unannotated_days=30, annotated_days=20), NOW)
     assert stats.items == 1 and n(engine, annotations) == 1  # "3": annotated, but past its limit
-    assert n(engine, item_sectors) == 0
+    assert n(engine, item_sectors) == 1  # only fresh "4" keeps its sectors
 
 
 def test_target_queries(engine, cfg):

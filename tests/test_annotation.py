@@ -29,6 +29,7 @@ from trade_news.db.schema import (
     assets,
     item_assets,
     item_relevance,
+    item_sectors,
 )
 from trade_news.pipeline import ingest
 
@@ -76,6 +77,7 @@ def payload(item_id, **over):
             "raw_phrase": None,
         },
         "event_type": "earnings",
+        "sectors": ["hardware"],
         "summary": "Apple отчиталась лучше ожиданий",
     }
     return base | over
@@ -93,6 +95,12 @@ def test_contract_validation():
     bad["assets"][0]["symbol_or_name"] = None
     assert "requires symbol_or_name" in validate_item(bad)
     assert "event_type" in validate_item(payload(1, event_type="gossip"))
+    # unknown sector keys are dropped, duplicates removed, at most 3 kept; missing → empty
+    odd = payload(1, sectors=["tech", "banks", "banks", "reit", "utilities", "defi"])
+    assert validate_item(odd).sectors == ["banks", "reit", "utilities"]
+    no_sectors = payload(1)
+    del no_sectors["sectors"]
+    assert validate_item(no_sectors).sectors == []
 
 
 def test_schema_and_prompt_carry_the_contract():
@@ -102,6 +110,10 @@ def test_schema_and_prompt_carry_the_contract():
     prompt = build_prompt([item])
     assert "published_at: 2026-09-23T10:00:00+00:00 (Wednesday)" in prompt
     assert "hints: related: AAPL" in prompt and "id: 7" in prompt
+    assert "- technology: semiconductors, software" in prompt and "{sector_list}" not in prompt
+    item_schema = schema["$defs"]["ItemAnnotation"]
+    assert "sectors" in item_schema["required"]
+    assert "semiconductors" in item_schema["properties"]["sectors"]["items"]["enum"]
 
 
 # --- relative dates ---------------------------------------------------------------
@@ -278,6 +290,9 @@ def test_annotates_and_is_idempotent(seeded, cfg):
     assert (stats.batches, stats.annotated, stats.unresolved_links) == (2, 3, 0)
     assert count(seeded, annotations) == 3
     assert count(seeded, item_assets) == 6 and count(seeded, item_relevance) == 3
+    with seeded.connect() as conn:
+        got = conn.execute(sa.select(item_sectors.c.sector, item_sectors.c.industry)).all()
+    assert got == [("technology", "hardware")] * 3
     with seeded.connect() as conn:
         linked = conn.execute(
             sa.select(assets.c.symbol).join(item_assets, item_assets.c.asset_id == assets.c.id)

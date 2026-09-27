@@ -11,11 +11,20 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
+
+from trade_news import sectors
 
 # Bump when the prompt or schema changes: annotations are unique per (item, prompt_version),
 # so a new version re-annotates items and old results stay for comparison.
-PROMPT_VERSION = "v2"
+PROMPT_VERSION = "v3"
 
 AssetClass = Literal["equity", "fx", "crypto", "commodity", "index", "rates", "macro"]
 Scope = Literal["market_wide", "group", "specific"]
@@ -26,6 +35,8 @@ EventType = Literal[
     "earnings", "guidance", "m_and_a", "regulatory", "macro", "rate_decision", "cb_speech",
     "insider", "other",
 ]  # fmt: skip
+SectorKey = Literal[tuple(sectors.all_keys())]  # type: ignore[valid-type]
+MAX_SECTORS = 3
 
 
 # --- input / output of a provider ---------------------------------------------
@@ -84,7 +95,9 @@ class AssetLink(_Strict):
         description="Ticker or name for scope=specific (AAPL, EUR/USD, BTC, Gold); null otherwise"
     )
     group_label: str | None = Field(
-        description="Sector/region/group for scope=group (tech, EM currencies); null otherwise"
+        description="For scope=group: a sector/industry key when the group is a sector "
+        "(semiconductors, banks), else a short English label (EM currencies, European stocks); "
+        "null otherwise"
     )
     direction: Direction | None = Field(description="Expected effect on THIS asset")
     importance: int = Field(ge=1, le=5, description="1=noise … 5=market-moving, for THIS asset")
@@ -111,12 +124,33 @@ class Relevance(_Strict):
     raw_phrase: str | None = Field(description="The date expression exactly as in the text")
 
 
+def _require_sectors(schema: dict[str, Any]) -> None:
+    # the model must always answer (an empty list is fine); validation tolerates a missing field
+    schema["required"] = [*schema.get("required", []), "sectors"]
+
+
 class ItemAnnotation(_Strict):
+    model_config = ConfigDict(extra="ignore", json_schema_extra=_require_sectors)
+
     id: int
     assets: list[AssetLink]
     relevance: Relevance
     event_type: EventType
+    sectors: list[SectorKey] = Field(
+        default_factory=list,
+        description="Sectors/industries the news is about, most specific keys, at most 3; "
+        "empty for broad market-wide news",
+    )
     summary: str = Field(description="One line in Russian: the essence of the news")
+
+    @field_validator("sectors", mode="before")
+    @classmethod
+    def _known_sectors(cls, value: Any) -> Any:
+        """Unknown keys are dropped, not fatal: a stray key must not dead-letter the item."""
+        if not isinstance(value, list):
+            return value
+        known = set(sectors.all_keys())
+        return list(dict.fromkeys(v for v in value if v in known))[:MAX_SECTORS]
 
 
 class BatchResponse(_Strict):
@@ -170,8 +204,22 @@ CRITICAL: resolve relative dates ("next Thursday", "tomorrow", "в следую�
 Friday") FROM THE ITEM'S published_at, NEVER from today's date. Put the original expression
 into raw_phrase. date_precision: exact (time known), day, month, quarter, unknown.
 
+sectors: up to 3 keys from the list below that the news is specifically about. Prefer the
+most specific industry key (an NVDA story → semiconductors); use a sector key only when the
+whole sector is affected or no industry fits (an oil price shock → energy). A company's own
+news → its industry. Crypto → crypto keys, FX pairs → fx keys. Leave empty for broad
+market-wide news (CPI, Fed decision, "stocks fall") unless it names particular sectors.
+{sector_list}
+
 summary: one short line in Russian with the essence (who, what, key number).
 Base everything only on the given text; do not invent facts."""
+
+
+def _sector_list() -> str:
+    return "\n".join(
+        f"- {s.key}" + (f": {', '.join(i.key for i in s.industries)}" if s.industries else "")
+        for s in sectors.SECTORS
+    )
 
 
 def _weekday(dt: datetime) -> str:
@@ -179,7 +227,7 @@ def _weekday(dt: datetime) -> str:
 
 
 def build_prompt(items: list[ItemForAnnotation], body_max_chars: int = 1500) -> str:
-    parts = [INSTRUCTIONS, "", "Items:"]
+    parts = [INSTRUCTIONS.replace("{sector_list}", _sector_list()), "", "Items:"]
     for it in items:
         body = " ".join((it.body or "").split())[:body_max_chars]
         parts += [

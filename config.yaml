@@ -14,6 +14,10 @@ retention:
   logs_days: 90          # collector_runs, llm_calls
   interval_hours: 24
 
+sectors:                 # equity sector/industry from SEC SIC codes, for stocks seen in news
+  interval_minutes: 10
+  batch: 100             # SEC requests per run (shares rate_limits.sec with sec_edgar)
+
 # Shared limiters. Several sources may point at one key (e.g. all SEC hosts share one quota).
 # Values are deliberately below documented limits.
 rate_limits:

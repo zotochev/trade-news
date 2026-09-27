@@ -1,8 +1,16 @@
 """Sector reference: key integrity, SIC mapping on known companies, crypto and FX labels."""
 
+import httpx
 import pytest
+import sqlalchemy as sa
 
+from tests.conftest import NOW, news_spec
+from trade_news import asset_sectors
 from trade_news import sectors as sec
+from trade_news.annotation import assets as ref
+from trade_news.collectors.base import Batch, RawItem
+from trade_news.db.schema import assets, item_assets, items
+from trade_news.pipeline import ingest
 
 
 def test_keys_unique_and_named():
@@ -86,3 +94,108 @@ def test_classify_crypto():
 )
 def test_fx_industries(base, quote, expected):
     assert sec.fx_industries(base, quote) == expected
+
+
+# --- filling assets -------------------------------------------------------------------
+
+TICKERS = {
+    "0": {"cik_str": 320193, "ticker": "AAPL", "title": "Apple Inc."},
+    "1": {"cik_str": 1652044, "ticker": "GOOGL", "title": "Alphabet Inc."},
+    "2": {"cik_str": 1652044, "ticker": "GOOG", "title": "Alphabet Inc."},
+    "3": {"cik_str": 789019, "ticker": "MSFT", "title": "Microsoft Corp"},
+    "4": {"cik_str": 9999999, "ticker": "GONE", "title": "Gone Corp"},
+}
+SIC_BY_CIK = {"0000320193": 3571, "0001652044": 7370, "0000789019": 7372}
+
+
+class FakeSEC:
+    def __init__(self, fail_after=None):
+        self.calls: list[str] = []
+        self.fail_after = fail_after
+
+    def __call__(self, url, **kw):
+        assert kw["headers"]["User-Agent"] == "Test test@example.com"
+        if self.fail_after is not None and len(self.calls) >= self.fail_after:
+            raise httpx.ConnectTimeout("timeout")
+        cik = url.rsplit("CIK", 1)[1].removesuffix(".json")
+        self.calls.append(cik)
+        req = httpx.Request("GET", url)
+        if cik not in SIC_BY_CIK:
+            resp = httpx.Response(404, request=req)
+            raise httpx.HTTPStatusError("404", request=req, response=resp)
+        return httpx.Response(200, json={"sic": str(SIC_BY_CIK[cik])}, request=req)
+
+
+@pytest.fixture
+def seeded(engine, cfg):
+    """Equities in news: GOOGL x2, GOOG, AAPL, GONE; MSFT only in the reference."""
+    with engine.begin() as conn:
+        ref.upsert_assets(conn, ref.yaml_assets(), "assets.yaml")
+        ref.upsert_assets(conn, ref.sec_equities(TICKERS), "sec")
+        ingest(conn, news_spec(), Batch([RawItem("1", "t", "b", None, NOW, {})]), cfg, NOW)
+        item_id = conn.execute(sa.select(items.c.id)).scalar()
+        ids = dict(conn.execute(sa.select(assets.c.symbol, assets.c.id)).all())
+        conn.execute(
+            item_assets.insert(),
+            [
+                {"item_id": item_id, "asset_class": "equity", "scope": "specific",
+                 "asset_id": ids[s]}
+                for s in ("GOOGL", "GOOGL", "GOOG", "AAPL", "GONE")
+            ],
+        )  # fmt: skip
+    return engine
+
+
+def sector_of(engine, symbol):
+    with engine.connect() as conn:
+        return conn.execute(
+            sa.select(assets.c.sector, assets.c.industry, assets.c.sic).where(
+                assets.c.symbol == symbol
+            )
+        ).one()
+
+
+def fill(engine, get, batch=100):
+    return asset_sectors.fill(engine, get, "Test test@example.com", NOW, batch)
+
+
+def test_fill_equities_and_reference(seeded):
+    sec_api = FakeSEC()
+    stats = fill(seeded, sec_api)
+    assert sec_api.calls == ["0001652044", "0000320193", "0009999999"]  # one per CIK, by mentions
+    assert (stats.looked_up, stats.not_found, stats.left) == (3, 1, 0)
+    assert sector_of(seeded, "GOOG") == ("communication", "internet", 7370)
+    assert sector_of(seeded, "AAPL") == ("technology", "hardware", 3571)
+    assert sector_of(seeded, "GONE") == (None, None, None)
+    assert sector_of(seeded, "MSFT") == (None, None, None)  # never in news: not looked up
+    assert sector_of(seeded, "BTC")[:2] == ("crypto", "cryptocurrencies")
+    assert sector_of(seeded, "USDJPY")[:2] == ("fx", "fx_majors")
+    assert sector_of(seeded, "SPX")[:2] == (None, None)
+
+    again = FakeSEC()
+    stats = fill(seeded, again)
+    assert again.calls == [] and stats.reference == 0  # nothing left, nothing changed
+
+
+def test_fill_in_batches_and_stops_on_errors(seeded):
+    stats = fill(seeded, FakeSEC(), batch=1)
+    assert (stats.looked_up, stats.left) == (1, 2)
+    stats = fill(seeded, FakeSEC(fail_after=1))
+    assert (stats.looked_up, stats.left) == (1, 1)  # AAPL done, the SEC timed out on GONE
+    assert sector_of(seeded, "AAPL")[1] == "hardware"
+    with seeded.connect() as conn:
+        assert asset_sectors.pending_ciks(conn) == ["0009999999"]
+
+
+def test_fill_without_sec_access_does_reference_only(seeded):
+    stats = asset_sectors.fill(seeded, None, None, NOW, 100)
+    assert (stats.looked_up, stats.left) == (0, 3)
+    assert sector_of(seeded, "ETH")[:2] == ("crypto", "smart_contracts")
+
+
+def test_changed_sic_table_is_reapplied(seeded):
+    fill(seeded, FakeSEC())
+    with seeded.begin() as conn:
+        conn.execute(assets.update().where(assets.c.symbol == "AAPL").values(industry="software"))
+        assert asset_sectors.apply_reference(conn) == 1
+    assert sector_of(seeded, "AAPL")[1] == "hardware"

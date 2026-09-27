@@ -210,6 +210,14 @@ def missing_secrets(spec: CollectorSpec) -> list[str]:
     return [name for name in spec.secrets if not os.environ.get(name)]
 
 
+def shared_limiter(cfg: Config, limiters: dict[str, RateLimiter], key: str) -> RateLimiter:
+    """One limiter per rate_limits key, shared by everything that calls that API."""
+    if key not in limiters:
+        rl = cfg.rate_limits.get(key)
+        limiters[key] = RateLimiter(rl.calls, rl.period) if rl else RateLimiter(1, 1)
+    return limiters[key]
+
+
 def make_context(
     spec: CollectorSpec,
     cfg: Config,
@@ -218,13 +226,11 @@ def make_context(
     now: Callable[[], datetime] = utcnow,
 ) -> Context:
     scfg = cfg.sources[spec.name]
-    key = scfg.rate_limit or spec.name
-    if key not in limiters:
-        rl = cfg.rate_limits.get(key)
-        limiters[key] = RateLimiter(rl.calls, rl.period) if rl else RateLimiter(1, 1)
     return Context(
         source=spec.name,
-        get=make_getter(client, limiters[key], source=spec.name),
+        get=make_getter(
+            client, shared_limiter(cfg, limiters, scfg.rate_limit or spec.name), source=spec.name
+        ),
         params=scfg.params,
         secrets={name: os.environ[name] for name in spec.secrets},
         now=now,

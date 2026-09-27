@@ -11,6 +11,7 @@ annotate            run the LLM annotation job once
 review              print a random sample of annotations for manual checking
 query ...           the spec's target queries (section 3)
 cleanup             delete data older than the retention settings
+sectors [--all]     fill sectors/industries of assets (SEC SIC codes for equities in news)
 admin               the admin web page alone (127.0.0.1:ADMIN_PORT); `run` starts it too
 """
 
@@ -28,7 +29,7 @@ import sqlalchemy as sa
 import structlog
 from dotenv import load_dotenv
 
-from trade_news import delivery, llm, queries, retention
+from trade_news import asset_sectors, delivery, llm, queries, retention
 from trade_news.admin import app as admin_app
 from trade_news.annotation import assets as asset_ref
 from trade_news.annotation.run import annotate_pending
@@ -47,9 +48,16 @@ from trade_news.db.schema import (
     llm_calls,
     subscribers,
 )
-from trade_news.http import RateLimiter
+from trade_news.http import RateLimiter, make_getter
 from trade_news.logs import setup_logging
-from trade_news.pipeline import WRITE_LOCK, make_context, missing_secrets, run_source, utcnow
+from trade_news.pipeline import (
+    WRITE_LOCK,
+    make_context,
+    missing_secrets,
+    run_source,
+    shared_limiter,
+    utcnow,
+)
 from trade_news.telegram import bot
 from trade_news.telegram.api import make_api
 
@@ -168,6 +176,17 @@ def cmd_run(cfg: Config) -> None:
         max_instances=1,
         coalesce=True,
     )
+    sec_get = make_getter(client, shared_limiter(cfg, limiters, "sec"), source="sectors")
+    scheduler.add_job(
+        run_sectors,
+        "interval",
+        args=(engine, sec_get, cfg),
+        minutes=cfg.sectors.interval_minutes,
+        next_run_time=utcnow() + timedelta(minutes=1),
+        id="sectors",
+        max_instances=1,
+        coalesce=True,
+    )
 
     source_list = [(s.name, s.description) for s in specs]
     bot_thread, bot_stop = start_bot(engine, client, source_list) or (None, None)
@@ -219,6 +238,33 @@ def run_cleanup(engine: sa.Engine, cfg: Config) -> None:
         retention.cleanup(engine, cfg.retention, utcnow(), write_lock=WRITE_LOCK)
     except Exception:
         log.exception("cleanup_job_failed")
+
+
+def run_sectors(engine: sa.Engine, get, cfg: Config) -> None:
+    try:
+        asset_sectors.fill(
+            engine,
+            get,
+            os.environ.get("SEC_USER_AGENT"),
+            utcnow(),
+            cfg.sectors.batch,
+            write_lock=WRITE_LOCK,
+        )
+    except Exception:
+        log.exception("sectors_job_failed")
+
+
+def cmd_sectors(cfg: Config, everything: bool) -> None:
+    engine = make_engine(cfg.database_url)
+    limiter = shared_limiter(cfg, {}, "sec")
+    with httpx.Client(timeout=30, follow_redirects=True) as client:
+        get = make_getter(client, limiter, source="sectors")
+        while True:
+            stats = asset_sectors.fill(
+                engine, get, os.environ.get("SEC_USER_AGENT"), utcnow(), cfg.sectors.batch
+            )
+            if not (everything and stats.looked_up and stats.left):
+                break
 
 
 def _no_equities(engine: sa.Engine) -> bool:
@@ -537,6 +583,8 @@ def main(argv: list[str] | None = None) -> None:
     r = sub.add_parser("review")
     r.add_argument("-n", type=int, default=20)
     sub.add_parser("cleanup")
+    sc = sub.add_parser("sectors")
+    sc.add_argument("--all", action="store_true", help="repeat until nothing is left")
     sub.add_parser("admin")
     q = sub.add_parser("query")
     q.add_argument("name", choices=["asset-news", "class-day", "upcoming", "scheduled"])
@@ -569,6 +617,8 @@ def main(argv: list[str] | None = None) -> None:
             cmd_review(cfg, args.n)
         case "cleanup":
             cmd_cleanup(cfg)
+        case "sectors":
+            cmd_sectors(cfg, args.all)
         case "admin":
             cmd_admin(cfg)
         case "query":

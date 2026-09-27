@@ -60,6 +60,13 @@ class RetentionConfig(BaseModel):
     interval_hours: float = Field(default=24, gt=0)
 
 
+class SectorsConfig(BaseModel):
+    """Background fill of equity sectors from SEC SIC codes (trade_news.asset_sectors)."""
+
+    interval_minutes: float = Field(default=10, gt=0)
+    batch: int = Field(default=100, gt=0, description="SEC lookups per run")
+
+
 class Config(BaseModel):
     database_url: str = "sqlite:///data/trade_news.db"
     dedup: DedupConfig = Field(default_factory=DedupConfig)
@@ -67,6 +74,7 @@ class Config(BaseModel):
     sources: dict[str, SourceConfig] = Field(default_factory=dict)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
+    sectors: SectorsConfig = Field(default_factory=SectorsConfig)
 
 
 def load_config(path: str | Path | None = None) -> Config:

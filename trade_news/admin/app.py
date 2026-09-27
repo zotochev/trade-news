@@ -24,7 +24,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 
 from trade_news import delivery, sectors, views
-from trade_news.admin import data
+from trade_news.admin import data, market
 from trade_news.config import Config
 
 log = structlog.get_logger()
@@ -142,6 +142,26 @@ def create_app(deps: AdminDeps) -> FastAPI:
             source=p.get("source", ""),
             sector=p.get("sector", "") if sectors.expand(p.get("sector", "")) else "",
             review_only=p.get("review") == "1",
+        )
+
+    @app.get("/market", response_class=HTMLResponse)
+    def market_page(request: Request):
+        now = deps.now()
+        with deps.engine.connect() as conn:
+            days, rows = market.sector_map(conn, now)
+            macro = market.macro(conn, now)
+            leaders = market.attention(conn, now)
+            insiders = market.insiders(conn, now)
+        return render(
+            request,
+            "market.html",
+            "market",
+            days=days,
+            sectors_rows=rows,
+            leaders=leaders,
+            macro=macro,
+            chart=market.yield_chart(macro.yields),
+            insiders=insiders,
         )
 
     @app.get("/news", response_class=HTMLResponse)

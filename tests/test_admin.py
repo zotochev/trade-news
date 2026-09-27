@@ -19,6 +19,8 @@ from trade_news.db.schema import (
     collector_runs,
     item_assets,
     items,
+    macro_observations,
+    rate_expectations,
     subscribers,
 )
 from trade_news.pipeline import ingest
@@ -95,7 +97,8 @@ def admin(engine, cfg):
 
 
 @pytest.mark.parametrize(
-    "path", ["/", "/?hours=168", "/news", "/llm", "/llm?days=30", "/assets", "/subscribers"]
+    "path",
+    ["/", "/?hours=168", "/market", "/news", "/llm", "/llm?days=30", "/assets", "/subscribers"],
 )
 def test_pages_render(admin, path):
     r = admin.get(path)
@@ -133,6 +136,36 @@ def test_news_sector_filter_and_tags(admin):
     assert '<option value="hardware" selected' in tech
     bogus = admin.get("/news?sector=bogus").text  # unknown key: no filter
     assert "Apple отчиталась" in bogus and "частная" in bogus
+
+
+def test_market_page(admin, engine):
+    empty = admin.get("/market").text
+    assert "Нет наблюдений FRED" in empty and "Снимков FedWatch ещё нет" in empty
+    assert 'href="/news?sector=hardware"' in empty  # the Apple item is on the sector map
+    assert '<a class="mono" href="/news?q=AAPL"' in empty  # and among the attention leaders
+    day = NOW.date()
+    with engine.begin() as conn:
+        conn.execute(
+            macro_observations.insert(),
+            [
+                {"series_id": s, "obs_date": day - timedelta(days=d), "value": v + d / 100,
+                 "source": "fred", "fetched_at": NOW}
+                for s, v in (("DGS2", 3.5), ("DGS10", 4.1)) for d in range(40)
+            ],
+        )  # fmt: skip
+        conn.execute(
+            rate_expectations.insert(),
+            [
+                {"central_bank": "fed", "meeting_date": day + timedelta(days=30), "outcome": o,
+                 "probability": p, "snapshot_at": at}
+                for at, probs in ((NOW - timedelta(days=1), (60, 40)), (NOW, (70, 30)))
+                for o, p in zip(("3.75%-4.00%", "4.00%-4.25%"), probs, strict=True)
+            ],
+        )  # fmt: skip
+    html = admin.get("/market").text
+    assert "Спред 2s10s" in html and "+60 б.п." in html
+    assert "2Y 3.50" in html and "10Y 4.10" in html  # direct labels at the line ends
+    assert "70.0%" in html and "+10.0" in html  # FedWatch probability and its change
 
 
 def test_csv_and_raw(admin, engine):

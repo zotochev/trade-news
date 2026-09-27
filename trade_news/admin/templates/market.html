@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}Рынок{% endblock %}
+{% macro tone_style(cell) -%}
+{%- if cell and cell.count -%}
+{%- set pct = cell.fill_pct -%}
+background: color-mix(in oklab, {{ 'var(--bull)' if cell.tone > 0 else 'var(--bear)' }} {{ pct }}%, #f4f3ef);{% if pct > 38 %} color: #fff;{% endif %}
+{%- endif -%}
+{%- endmacro %}
+{% macro cell_title(label, cell) -%}
+{{ label }}: {{ cell.count }} {{ 'новость' if cell.count % 10 == 1 and cell.count % 100 != 11 else 'новостей' }}, ▲{{ cell.bull }} ▼{{ cell.bear }}
+{%- endmacro %}
+{% block content %}
+<style>
+.heat { font-size: 12px; }
+.heat td, .heat th { padding: 6px 4px; text-align: center; }
+.heat td:first-child, .heat th:first-child { text-align: left; }
+.heat td.c { font-family: var(--mono); border-radius: 6px; border: 2px solid var(--card); min-width: 44px; }
+.heat tr.ind td:first-child { padding-left: 18px; color: var(--ink-2); }
+.heat tr.ind { display: none; }
+.heat tr.open-ind { display: table-row; }
+.heat button.tog { border: 0; background: none; padding: 0 4px 0 0; cursor: pointer; color: var(--muted); font-size: 11px; min-height: 0; }
+.legend { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.legend .ramp { width: 160px; height: 10px; border-radius: 5px; background: linear-gradient(90deg, color-mix(in oklab, var(--bear) 70%, #f4f3ef), #f4f3ef, color-mix(in oklab, var(--bull) 70%, #f4f3ef)); }
+.chart-wrap { position: relative; }
+.chart-wrap svg { width: 100%; height: auto; display: block; }
+.chart-tip { position: absolute; pointer-events: none; background: var(--ink); color: #fff; font-size: 12px; padding: 6px 9px; border-radius: 6px; white-space: nowrap; display: none; line-height: 1.5; }
+.chart-tip i { display: inline-block; width: 10px; height: 2px; vertical-align: middle; margin-right: 5px; }
+.fw-row { display: grid; grid-template-columns: 110px 1fr 54px 56px; gap: 8px; align-items: center; font-size: 12px; }
+.up { color: var(--bull); } .down { color: var(--bear); }
+</style>
+
+<header class="page">
+  <div>
+    <h1>Рынок</h1>
+    <p class="sub">О чём пишут и в какую сторону, макро и ставки · время UTC · обновлено {{ now | dt('%H:%M') }}</p>
+  </div>
+  <div class="legend" aria-label="Шкала тона"><span>▼ негатив</span><span class="ramp"></span><span>▲ позитив</span></div>
+</header>
+
+<section class="card" aria-labelledby="heat-h">
+  <div class="card-head">
+    <h2 id="heat-h">Карта отраслей</h2>
+    <span class="small muted">число новостей по дню публикации; цвет — тон главных активов с весом по важности; ▸ — отрасли сектора</span>
+  </div>
+  {% if sectors_rows %}
+  <div style="overflow-x: auto;">
+  <table class="heat">
+    <thead><tr>
+      <th>Сектор / отрасль</th>
+      {% for d in days %}<th>{{ d.strftime('%d.%m') }}<div class="muted" style="font-weight: 400;">{{ ['пн','вт','ср','чт','пт','сб','вс'][d.weekday()] }}</div></th>{% endfor %}
+      <th>24 ч</th><th>к пред. 24 ч</th><th>7 дней</th>
+    </tr></thead>
+    <tbody>
+    {% for r in sectors_rows %}
+      {% for row in [r] + r.industries %}
+      {% set ind = not loop.first %}
+      <tr class="{{ 'ind' if ind }}" {% if ind %}data-parent="{{ r.key }}"{% endif %}>
+        <td>{% if not ind and r.industries %}<button class="tog" type="button" data-toggle="{{ r.key }}" aria-expanded="false" aria-label="Показать отрасли">▸</button>{% endif %}<a href="/news?sector={{ row.key }}" style="color: inherit; {{ 'font-weight: 500;' if not ind }}">{{ row.name }}</a></td>
+        {% for d in days %}{% set c = row.days.get(d) %}
+        <td class="c" style="{{ tone_style(c) }}" {% if c %}title="{{ cell_title(d.strftime('%d.%m'), c) }}"{% endif %}>{{ c.count if c else '' }}</td>
+        {% endfor %}
+        <td class="c" style="{{ tone_style(row.last24) }}" title="{{ cell_title('24 ч', row.last24) }}">{{ row.last24.count or '' }}</td>
+        {% set delta = row.last24.count - row.prev24.count %}
+        <td class="mono small {{ 'up' if delta > 0 else ('down' if delta < 0 else 'muted') }}">{{ '%+d' % delta if row.last24.count or row.prev24.count else '' }}</td>
+        <td class="c" style="{{ tone_style(row.week) }}" title="{{ cell_title('7 дней', row.week) }}">{{ row.week.count }}</td>
+      </tr>
+      {% endfor %}
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}<p class="empty">Пока нет размеченных новостей с отраслями.</p>{% endif %}
+</section>
+
+<div class="grid cols-3">
+  <section class="card" aria-labelledby="att-h">
+    <div class="card-head"><h2 id="att-h">Лидеры внимания</h2><span class="small muted">24 ч</span></div>
+    <table>
+      <thead><tr><th>Актив</th><th class="num">24 ч</th><th>Тон</th><th class="num" title="Во сколько раз чаще обычного дня за прошлую неделю">к норме</th></tr></thead>
+      <tbody>
+      {% for ld in leaders %}
+        <tr>
+          <td><a class="mono" href="/news?q={{ ld.symbol | urlencode }}" style="font-weight: 500;">{{ ld.symbol }}</a>
+            <div class="small muted ellipsis" style="max-width: 190px;">{{ sector_name(ld.industry or ld.sector) if (ld.industry or ld.sector) else (ld.name or '') }}</div></td>
+          <td class="num">{{ ld.last24.count }}</td>
+          <td class="small mono">{% if ld.last24.bull %}<span class="up">▲{{ ld.last24.bull }}</span> {% endif %}{% if ld.last24.bear %}<span class="down">▼{{ ld.last24.bear }}</span>{% endif %}</td>
+          <td class="num {{ 'up' if ld.ratio and ld.ratio >= 2 }}" style="{{ 'font-weight: 600;' if ld.ratio and ld.ratio >= 2 }}">{{ '×%.1f' % ld.ratio if ld.ratio is not none else 'новый' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="empty">За сутки нет новостей с активами</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card span-2" aria-labelledby="y-h">
+    <div class="card-head"><h2 id="y-h">Доходности казначейских облигаций США</h2><span class="small muted">FRED, дневные, %</span></div>
+    <div class="kpis">
+      {% for t in macro.tiles %}
+      <div class="kpi"><span class="l">{{ t.label }}</span><span class="v" style="font-size: 22px;">{{ t.value }}</span>
+        <span class="n">{% if t.change %}<span class="{{ 'up' if t.change.startswith('+') and not t.change.startswith('+0') else ('down' if t.change.startswith('-') else '') }}">{{ t.change }}</span> · {% endif %}{{ t.note }}</span></div>
+      {% endfor %}
+    </div>
+    {% if chart %}
+    <div class="chart-wrap" id="ychart">
+      <svg viewBox="0 0 {{ chart.w }} {{ chart.h }}" role="img" aria-label="Доходности 2Y и 10Y за год">
+        {% for t in chart.y_ticks %}
+        <line x1="{{ chart.left }}" x2="{{ chart.right }}" y1="{{ t.y }}" y2="{{ t.y }}" stroke="#ebe8e0" stroke-width="1"/>
+        <text x="{{ chart.left - 8 }}" y="{{ t.y + 4 }}" text-anchor="end" font-size="11" fill="#5d5a52" font-family="IBM Plex Mono, monospace">{{ t.label }}</text>
+        {% endfor %}
+        {% for t in chart.x_ticks %}
+        <text x="{{ t.x }}" y="{{ chart.bottom + 18 }}" text-anchor="middle" font-size="11" fill="#5d5a52" font-family="IBM Plex Mono, monospace">{{ t.label }}</text>
+        {% endfor %}
+        <line x1="{{ chart.left }}" x2="{{ chart.right }}" y1="{{ chart.bottom }}" y2="{{ chart.bottom }}" stroke="#cfccc2" stroke-width="1"/>
+        <path d="{{ chart.p10 }}" fill="none" stroke="#1baf7a" stroke-width="2" stroke-linejoin="round"/>
+        <path d="{{ chart.p2 }}" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round"/>
+        <circle cx="{{ chart.end10.x }}" cy="{{ chart.end10.y }}" r="4" fill="#1baf7a" stroke="#fff" stroke-width="2"/>
+        <circle cx="{{ chart.end2.x }}" cy="{{ chart.end2.y }}" r="4" fill="#2a78d6" stroke="#fff" stroke-width="2"/>
+        <text x="{{ chart.end10.x + 10 }}" y="{{ chart.end10.ly + 4 }}" font-size="12" fill="#1b1d21" font-family="IBM Plex Mono, monospace">10Y {{ '%.2f' % chart.end10.v }}</text>
+        <text x="{{ chart.end2.x + 10 }}" y="{{ chart.end2.ly + 4 }}" font-size="12" fill="#1b1d21" font-family="IBM Plex Mono, monospace">2Y {{ '%.2f' % chart.end2.v }}</text>
+        <line id="ycross" x1="0" x2="0" y1="{{ chart.top }}" y2="{{ chart.bottom }}" stroke="#5d5a52" stroke-width="1" stroke-dasharray="3 3" visibility="hidden"/>
+        <circle id="ydot10" r="4" fill="#1baf7a" stroke="#fff" stroke-width="2" visibility="hidden"/>
+        <circle id="ydot2" r="4" fill="#2a78d6" stroke="#fff" stroke-width="2" visibility="hidden"/>
+        <rect id="yhit" x="{{ chart.left }}" y="{{ chart.top }}" width="{{ chart.right - chart.left }}" height="{{ chart.bottom - chart.top }}" fill="transparent"/>
+      </svg>
+      <div class="chart-tip" id="ytip"></div>
+    </div>
+    <div class="legend"><span><i style="display:inline-block;width:14px;height:2px;background:#2a78d6;vertical-align:middle;"></i> 2Y</span><span><i style="display:inline-block;width:14px;height:2px;background:#1baf7a;vertical-align:middle;"></i> 10Y</span></div>
+    <details class="small"><summary>Таблица за последние 15 дней</summary>
+      <table style="margin-top: 6px;"><thead><tr><th>Дата</th><th class="num">2Y</th><th class="num">10Y</th><th class="num">2s10s, б.п.</th></tr></thead>
+      <tbody>{% for p in macro.yields[-15:] | reverse %}<tr><td class="mono">{{ p.d }}</td><td class="num">{{ '%.2f' % p.y2 }}</td><td class="num">{{ '%.2f' % p.y10 }}</td><td class="num">{{ '%+.0f' % ((p.y10 - p.y2) * 100) }}</td></tr>{% endfor %}</tbody></table>
+    </details>
+    <script type="application/json" id="ydata">{{ chart.points | tojson }}</script>
+    {% else %}<p class="empty">Нет наблюдений FRED.</p>{% endif %}
+  </section>
+</div>
+
+<div class="grid cols-3">
+  <section class="card" aria-labelledby="fw-h">
+    <div class="card-head"><h2 id="fw-h">Ожидания по ставке ФРС</h2><span class="small muted">CME FedWatch{% if macro.fedwatch_at %} · {{ macro.fedwatch_at | dt('%d.%m') }}{% endif %}</span></div>
+    {% for m in macro.fedwatch %}
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <h3>Заседание {{ m.meeting.strftime('%d.%m.%Y') }}</h3>
+        {% for o, p, ch in m.outcomes %}
+        <div class="fw-row"><span class="mono">{{ o }}</span><div class="bar"><div style="width: {{ p }}%;"></div></div>
+          <span class="num">{{ '%.1f' % p }}%</span>
+          <span class="num small {{ 'up' if ch and ch >= 0.05 else ('down' if ch and ch <= -0.05 else 'muted') }}">{{ '%+.1f' % ch if ch is not none else '' }}</span></div>
+        {% endfor %}
+      </div>
+    {% else %}<p class="empty">Снимков FedWatch ещё нет.</p>{% endfor %}
+    {% if macro.fedwatch %}<p class="small muted" style="margin: 0;">Справа — изменение к прошлому снимку, п.п.</p>{% endif %}
+  </section>
+
+  <section class="card" aria-labelledby="cal-h">
+    <div class="card-head"><h2 id="cal-h">Календарь: важное впереди</h2><span class="small muted">7 дней</span></div>
+    <table>
+      <thead><tr><th>Когда</th><th>Событие</th><th class="num">Прогноз</th><th class="num">Пред.</th></tr></thead>
+      <tbody>
+      {% for e in macro.calendar %}
+        <tr><td class="mono small">{{ e.scheduled_at | dt('%a %d.%m %H:%M') }}</td>
+          <td><span class="mono small muted">{{ e.currency }}</span> {{ e.event_name }}</td>
+          <td class="num">{{ e.forecast if e.forecast is not none else '—' }}{{ e.unit or '' }}</td>
+          <td class="num muted">{{ e.previous if e.previous is not none else '—' }}{{ e.unit or '' }}</td></tr>
+      {% else %}
+        <tr><td colspan="4" class="empty">Нет важных событий на неделю</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card" aria-labelledby="ins-h">
+    <div class="card-head"><h2 id="ins-h">Инсайдеры</h2><span class="small muted">Form 4 выше порогов · 7 дней</span></div>
+    <table>
+      <thead><tr><th>Дата</th><th>Компания</th><th>Сделка</th></tr></thead>
+      <tbody>
+      {% for i in insiders %}
+        <tr><td class="mono small">{{ i.at | dt('%d.%m') }}</td>
+          <td><a href="/news?id={{ i.id }}" class="mono" style="font-weight: 500;">{{ i.ticker or '—' }}</a>
+            <div class="small muted ellipsis" style="max-width: 150px;" title="{{ i.issuer }}">{{ i.issuer }}</div></td>
+          <td class="small"><span class="{{ 'up' if i.buy else 'down' }}" style="font-weight: 500;">{{ '▲' if i.buy else '▼' }} {{ i.what | replace('open-market purchase', 'покупка') | replace('open-market sale', 'продажа') }}</span>
+            <div class="muted ellipsis" style="max-width: 190px;" title="{{ i.owners }} · {{ i.roles }}">{{ i.roles }} · {{ i.owners }}</div></td></tr>
+      {% else %}
+        <tr><td colspan="3" class="empty">Значимых сделок за неделю нет</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<script>
+document.querySelectorAll('.heat button.tog').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var open = b.getAttribute('aria-expanded') !== 'true';
+    b.setAttribute('aria-expanded', open); b.textContent = open ? '▾' : '▸';
+    document.querySelectorAll('.heat tr[data-parent="' + b.dataset.toggle + '"]').forEach(function (r) { r.classList.toggle('open-ind', open); });
+  });
+});
+(function () {
+  var data = document.getElementById('ydata'); if (!data) return;
+  var pts = JSON.parse(data.textContent), svg = document.querySelector('#ychart svg'), tip = document.getElementById('ytip');
+  var cross = document.getElementById('ycross'), d2 = document.getElementById('ydot2'), d10 = document.getElementById('ydot10');
+  function hide() { [cross, d2, d10].forEach(function (e) { e.setAttribute('visibility', 'hidden'); }); tip.style.display = 'none'; }
+  document.getElementById('yhit').addEventListener('mousemove', function (ev) {
+    var pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+    var x = pt.matrixTransform(svg.getScreenCTM().inverse()).x, best = pts[0];
+    pts.forEach(function (p) { if (Math.abs(p.x - x) < Math.abs(best.x - x)) best = p; });
+    cross.setAttribute('x1', best.x); cross.setAttribute('x2', best.x);
+    d2.setAttribute('cx', best.x); d2.setAttribute('cy', best.y2); d10.setAttribute('cx', best.x); d10.setAttribute('cy', best.y10);
+    [cross, d2, d10].forEach(function (e) { e.setAttribute('visibility', 'visible'); });
+    tip.innerHTML = best.d + '<br><i style="background:#2a78d6"></i>2Y ' + best.v2.toFixed(2) + '%<br><i style="background:#1baf7a"></i>10Y ' + best.v10.toFixed(2) + '%<br>2s10s ' + Math.round((best.v10 - best.v2) * 100) + ' б.п.';
+    var box = svg.getBoundingClientRect(), wrap = svg.parentNode.getBoundingClientRect(), px = (best.x / {{ chart.w if chart else 1 }}) * box.width;
+    tip.style.display = 'block'; tip.style.top = '8px';
+    tip.style.left = (px + 12 + tip.offsetWidth > wrap.width ? px - tip.offsetWidth - 12 : px + 12) + 'px';
+  });
+  document.getElementById('yhit').addEventListener('mouseleave', hide);
+})();
+</script>
+{% endblock %}

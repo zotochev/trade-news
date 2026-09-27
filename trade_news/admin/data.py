@@ -22,6 +22,7 @@ from trade_news.db.schema import (
     deliveries,
     item_assets,
     item_relevance,
+    item_sectors,
     items,
     llm_calls,
     subscribers,
@@ -250,7 +251,7 @@ def news(conn, f: NewsFilter) -> list[dict]:
 
 def reset_annotation(conn, item_id: int) -> None:
     """Drops the item's current-version annotation so the job annotates it again."""
-    for table in (item_assets, item_relevance, asset_resolution_queue):
+    for table in (item_assets, item_relevance, item_sectors, asset_resolution_queue):
         conn.execute(table.delete().where(table.c.item_id == item_id))
     conn.execute(
         annotation_dead_letters.delete().where(

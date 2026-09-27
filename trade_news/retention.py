@@ -26,6 +26,7 @@ from trade_news.db.schema import (
     deliveries,
     item_assets,
     item_relevance,
+    item_sectors,
     items,
     llm_calls,
     raw_items,
@@ -37,6 +38,7 @@ CHUNK = 500
 _ITEM_CHILDREN = (
     item_assets,
     item_relevance,
+    item_sectors,
     asset_resolution_queue,
     annotation_dead_letters,
     deliveries,

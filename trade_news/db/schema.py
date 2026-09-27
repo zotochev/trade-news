@@ -147,11 +147,15 @@ assets = sa.Table(
     sa.Column("exchange", sa.Text),
     sa.Column("base_ccy", sa.Text),
     sa.Column("quote_ccy", sa.Text),
-    sa.Column("sector", sa.Text),
+    sa.Column("sector", sa.Text),  # keys of trade_news.sectors
+    sa.Column("industry", sa.Text),
+    sa.Column("sic", sa.Integer),  # SEC SIC code: sector/industry are derived from it
+    sa.Column("sector_checked_at", UTCDateTime),  # SEC lookup done (even if SIC is missing)
     sa.Column("cik", sa.String(10), index=True),  # SEC CIK for equities: exact match for filings
     sa.Column("is_active", sa.Boolean, nullable=False, server_default=sa.true()),
     sa.UniqueConstraint("asset_class", "symbol"),
     sa.Index(None, "symbol"),
+    sa.Index(None, "sector", "industry"),
 )
 
 asset_aliases = sa.Table(
@@ -210,6 +214,19 @@ item_relevance = sa.Table(
     sa.Column("needs_review", sa.Boolean, nullable=False, server_default=sa.false()),
     sa.Index(None, "relevant_from"),
     sa.Index(None, "relevance_type", "relevant_from"),
+)
+
+# Sectors/industries the LLM named for an item (keys of trade_news.sectors). The item's full
+# set also includes its linked assets' sectors, computed at read time.
+item_sectors = sa.Table(
+    "item_sectors",
+    metadata,
+    _pk(),
+    sa.Column("item_id", BigId, sa.ForeignKey("items.id"), nullable=False, index=True),
+    sa.Column("annotation_id", BigId, sa.ForeignKey("annotations.id")),
+    sa.Column("sector", sa.Text, nullable=False),
+    sa.Column("industry", sa.Text),  # None: the whole sector
+    sa.Index(None, "sector", "industry"),
 )
 
 annotations = sa.Table(

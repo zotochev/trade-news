@@ -9,7 +9,14 @@ from trade_news.annotation import assets as ref
 from trade_news.annotation.run import annotate_pending
 from trade_news.collectors.base import Batch, RawItem
 from trade_news.config import LLMConfig, RetentionConfig
-from trade_news.db.schema import annotations, collector_runs, item_assets, items, raw_items
+from trade_news.db.schema import (
+    annotations,
+    collector_runs,
+    item_assets,
+    item_sectors,
+    items,
+    raw_items,
+)
 from trade_news.pipeline import ingest
 from trade_news.retention import cleanup
 
@@ -54,6 +61,16 @@ def test_cleanup_by_age_and_annotation(engine, cfg):
         for t in ("item_relevance", "asset_resolution_queue"):
             conn.execute(sa.text(f"delete from {t} where item_id = :i"), {"i": leader_1})
         conn.execute(annotations.delete().where(annotations.c.item_id == leader_1))
+        leader_3 = conn.execute(sa.select(items.c.id).where(items.c.source_item_id == "3")).scalar()
+        conn.execute(
+            item_sectors.insert().values(
+                item_id=leader_3,
+                annotation_id=sa.select(annotations.c.id)
+                .where(annotations.c.item_id == leader_3)
+                .scalar_subquery(),
+                sector="technology",
+            )
+        )
 
     stats = cleanup(
         engine, RetentionConfig(unannotated_days=30, annotated_days=365, logs_days=90), NOW
@@ -66,6 +83,7 @@ def test_cleanup_by_age_and_annotation(engine, cfg):
 
     stats = cleanup(engine, RetentionConfig(unannotated_days=30, annotated_days=20), NOW)
     assert stats.items == 1 and n(engine, annotations) == 1  # "3": annotated, but past its limit
+    assert n(engine, item_sectors) == 0
 
 
 def test_target_queries(engine, cfg):

@@ -97,7 +97,6 @@ def to_raw_items(entries: list[dict]) -> list[RawItem]:
 )
 def fetch(ctx: Context, cursor: dict | None) -> Batch:
     cursor = dict(cursor or {})
-    first_run = "4" not in cursor
     seen_form4 = set(cursor.get(FORM4_SEEN_KEY) or [])
     headers = {"User-Agent": ctx.secrets["SEC_USER_AGENT"], "Accept-Encoding": "gzip, deflate"}
     forms = ctx.params.get("forms", ["8-K", "10-Q", "10-K", "4"])
@@ -137,8 +136,8 @@ def fetch(ctx: Context, cursor: dict | None) -> Batch:
 
     items = to_raw_items(entries)
     if "4" in forms and ctx.params.get("form4_details", True):
-        items = _with_form4_details(ctx, items, headers, None if first_run else seen_form4)
-        # remember every Form 4 decided on (details fetched or skipped), newest last
+        items = _with_form4_details(ctx, items, headers, seen_form4)
+        # remember every Form 4 whose details were fetched (parsed or not), newest last
         done = [it.source_item_id for it in items if form_matches(it.raw.get("form"), "4")]
         kept = [a for a in cursor.get(FORM4_SEEN_KEY) or [] if a not in set(done)]
         cursor[FORM4_SEEN_KEY] = (kept + done)[-FORM4_SEEN_MAX:]
@@ -146,24 +145,22 @@ def fetch(ctx: Context, cursor: dict | None) -> Batch:
 
 
 def _with_form4_details(
-    ctx: Context, items: list[RawItem], headers, seen: set[str] | None
+    ctx: Context, items: list[RawItem], headers, seen: set[str]
 ) -> list[RawItem]:
     """Fetches and parses new Form 4 filings. Items that don't matter get raw["llm_skip"].
 
-    New means an accession not decided on before (`seen`; None on the first run: everything).
-    Not a time cursor: Form 4 reach the feed minutes after their acceptance time, when faster
-    filings (424B2 …) have already moved the time cursor past them."""
+    Form 4 already fetched (`seen` accessions) are left out of the batch entirely: the feed
+    repeats them on every run, and a copy without the parsed details has another content hash,
+    so ingest would store it as a new revision over the parsed one. Over the per-run budget
+    they are left out too, and not marked seen: the next run fetches them."""
     th = form4.Thresholds(**ctx.params.get("form4_thresholds", {}))
     budget = int(ctx.params.get("form4_max_details_per_run", 150))
     out = []
     for it in items:
-        is_new = seen is None or it.source_item_id not in seen
-        if not form_matches(it.raw.get("form"), "4") or not is_new or budget <= 0:
-            if form_matches(it.raw.get("form"), "4"):
-                # details not fetched (seen before or over budget): never worth an LLM call blind
-                it = RawItem(it.source_item_id, it.title, it.body, it.url, it.published_at,
-                             {**it.raw, "llm_skip": "form 4 without details"})  # fmt: skip
+        if not form_matches(it.raw.get("form"), "4"):
             out.append(it)
+            continue
+        if it.source_item_id in seen or budget <= 0:
             continue
         budget -= 1
         try:

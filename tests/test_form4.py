@@ -113,9 +113,13 @@ def test_collector_enriches_new_form4_only():
     assert buy.title == "Form 4 · PNRG · Director buys $21K" and "llm_skip" not in buy.raw
     assert buy.raw["form4"]["ticker"] == "PNRG" and "$211.70" in buy.body
     assert by_id["0000000001-26-000002"].raw["llm_skip"] == "no open-market trades"
-    assert by_id["0000000001-26-000003"].raw["llm_skip"] == "form 4 without details"
+    assert "0000000001-26-000003" not in by_id  # fetched before: never re-sent without details
     assert by_id["0000000001-26-000004"].raw["llm_skip"] == "no open-market trades"
     assert set(batch.cursor["form4_seen"]) == {f"0000000001-26-00000{i}" for i in range(1, 5)}
+    # the feed repeats the same filings on the next run: nothing to overwrite the parsed rows
+    again = fetch(ctx, batch.cursor)
+    assert not [it for it in again.items if it.raw.get("form") == "4"]
+    assert sorted(fetched) == sorted(docs)
 
 
 def test_llm_skip_items_are_not_annotated(engine, cfg):

@@ -23,6 +23,8 @@ FEED_URL = "https://www.sec.gov/cgi-bin/browse-edgar"
 PAGE_SIZE = 100
 NS = {"a": "http://www.w3.org/2005/Atom"}
 _TAG_RE = re.compile(r"<[^>]+>")
+FORM4_SEEN_KEY = "form4_seen"  # cursor: accessions of Form 4 already decided on
+FORM4_SEEN_MAX = 3000  # several days of Form 4 (~400 a day): far beyond the feed pages we read
 _ACCESSION_RE = re.compile(r"accession-number=([\d-]+)")
 _TITLE_RE = re.compile(r"^(?P<form>.+?) - (?P<company>.+) \((?P<cik>\d{10})\) \((?P<role>[^)]+)\)$")
 
@@ -95,7 +97,8 @@ def to_raw_items(entries: list[dict]) -> list[RawItem]:
 )
 def fetch(ctx: Context, cursor: dict | None) -> Batch:
     cursor = dict(cursor or {})
-    seen_form4 = datetime.fromisoformat(cursor["4"]) if "4" in cursor else None
+    first_run = "4" not in cursor
+    seen_form4 = set(cursor.get(FORM4_SEEN_KEY) or [])
     headers = {"User-Agent": ctx.secrets["SEC_USER_AGENT"], "Accept-Encoding": "gzip, deflate"}
     forms = ctx.params.get("forms", ["8-K", "10-Q", "10-K", "4"])
     max_pages = int(ctx.params.get("max_pages", 5))
@@ -133,18 +136,28 @@ def fetch(ctx: Context, cursor: dict | None) -> Batch:
             cursor[form] = newest.isoformat()
 
     items = to_raw_items(entries)
-    if ctx.params.get("form4_details", True):
-        items = _with_form4_details(ctx, items, headers, seen_form4)
+    if "4" in forms and ctx.params.get("form4_details", True):
+        items = _with_form4_details(ctx, items, headers, None if first_run else seen_form4)
+        # remember every Form 4 decided on (details fetched or skipped), newest last
+        done = [it.source_item_id for it in items if form_matches(it.raw.get("form"), "4")]
+        kept = [a for a in cursor.get(FORM4_SEEN_KEY) or [] if a not in set(done)]
+        cursor[FORM4_SEEN_KEY] = (kept + done)[-FORM4_SEEN_MAX:]
     return Batch(items=items, cursor=cursor)
 
 
-def _with_form4_details(ctx: Context, items: list[RawItem], headers, seen_until) -> list[RawItem]:
-    """Fetches and parses new Form 4 filings. Items that don't matter get raw["llm_skip"]."""
+def _with_form4_details(
+    ctx: Context, items: list[RawItem], headers, seen: set[str] | None
+) -> list[RawItem]:
+    """Fetches and parses new Form 4 filings. Items that don't matter get raw["llm_skip"].
+
+    New means an accession not decided on before (`seen`; None on the first run: everything).
+    Not a time cursor: Form 4 reach the feed minutes after their acceptance time, when faster
+    filings (424B2 …) have already moved the time cursor past them."""
     th = form4.Thresholds(**ctx.params.get("form4_thresholds", {}))
     budget = int(ctx.params.get("form4_max_details_per_run", 150))
     out = []
     for it in items:
-        is_new = seen_until is None or (it.published_at and it.published_at >= seen_until)
+        is_new = seen is None or it.source_item_id not in seen
         if not form_matches(it.raw.get("form"), "4") or not is_new or budget <= 0:
             if form_matches(it.raw.get("form"), "4"):
                 # details not fetched (seen before or over budget): never worth an LLM call blind

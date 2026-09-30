@@ -82,6 +82,8 @@ def test_collector_enriches_new_form4_only():
                 _feed_entry(
                     "0000000001-26-000003", "0000000003", "2026-09-23T13:00:00+00:00"
                 ),  # seen
+                # accepted before the time cursor but reached the feed late: still new
+                _feed_entry("0000000001-26-000004", "0000000004", "2026-09-23T13:30:00+00:00"),
             ]
         )
         + "</feed>"
@@ -89,6 +91,7 @@ def test_collector_enriches_new_form4_only():
     docs = {
         "0000000001-26-000001.txt": (FIXTURES / "form4_purchase.txt").read_text(encoding="utf-8"),
         "0000000001-26-000002.txt": (FIXTURES / "form4_rsu.txt").read_text(encoding="utf-8"),
+        "0000000001-26-000004.txt": (FIXTURES / "form4_rsu.txt").read_text(encoding="utf-8"),
     }
     fetched = []
 
@@ -103,7 +106,7 @@ def test_collector_enriches_new_form4_only():
         params={"forms": ["4"], "form4_thresholds": {"min_buy_usd": 10_000}},
         secrets={"SEC_USER_AGENT": "a b@c.d"},
     )
-    batch = fetch(ctx, {"4": "2026-09-23T14:00:00+00:00"})
+    batch = fetch(ctx, {"4": "2026-09-23T14:00:00+00:00", "form4_seen": ["0000000001-26-000003"]})
     by_id = {it.source_item_id: it for it in batch.items}
     assert sorted(fetched) == sorted(docs)  # the already-seen filing is not downloaded again
     buy = by_id["0000000001-26-000001"]
@@ -111,6 +114,8 @@ def test_collector_enriches_new_form4_only():
     assert buy.raw["form4"]["ticker"] == "PNRG" and "$211.70" in buy.body
     assert by_id["0000000001-26-000002"].raw["llm_skip"] == "no open-market trades"
     assert by_id["0000000001-26-000003"].raw["llm_skip"] == "form 4 without details"
+    assert by_id["0000000001-26-000004"].raw["llm_skip"] == "no open-market trades"
+    assert set(batch.cursor["form4_seen"]) == {f"0000000001-26-00000{i}" for i in range(1, 5)}
 
 
 def test_llm_skip_items_are_not_annotated(engine, cfg):

@@ -44,6 +44,7 @@ MATERIAL_EVENTS = [
 ]  # fmt: skip
 MAX_ATTEMPTS = 5
 ALWAYS_SOURCES = ["ff_calendar", "cme_fedwatch", "fred"]
+WHALE = annotations.c.payload_json[("whale", "whale")].as_boolean()
 
 
 class DeliveryRules(BaseModel):
@@ -77,14 +78,22 @@ def save_rules(conn: sa.Connection, rules: DeliveryRules, now: datetime) -> None
         conn.execute(settings.insert().values(key=SETTINGS_KEY, value=value, updated_at=now))
 
 
-def is_priority(rules: DeliveryRules, source: str | None, event_type: str | None) -> bool:
-    return source in rules.always_sources or event_type in rules.always_event_types
+def is_priority(
+    rules: DeliveryRules, source: str | None, event_type: str | None, whale: bool = False
+) -> bool:
+    """Priority signals skip the thresholds and go first, one per message. Whales (see
+    annotation.whale) always do, whatever the importance the LLM gave."""
+    return whale or source in rules.always_sources or event_type in rules.always_event_types
 
 
 def passes(
-    rules: DeliveryRules, links: list[dict], event_type: str | None, source: str | None = None
+    rules: DeliveryRules,
+    links: list[dict],
+    event_type: str | None,
+    source: str | None = None,
+    whale: bool = False,
 ) -> bool:
-    if is_priority(rules, source, event_type):
+    if is_priority(rules, source, event_type, whale):
         return True
     watch = {s.upper() for s in rules.watchlist}
     if any(
@@ -114,7 +123,12 @@ def matching_items(
     still waiting for the second pass are held back (at most whale.PENDING_MAX_WAIT), so they
     don't go out without their whale formatting."""
     q = (
-        sa.select(annotations.c.item_id, views.EVENT_TYPE.label("event_type"), items.c.source)
+        sa.select(
+            annotations.c.item_id,
+            views.EVENT_TYPE.label("event_type"),
+            items.c.source,
+            WHALE.label("whale"),
+        )
         .join(items, items.c.id == annotations.c.item_id)
         .where(views.current_annotation(), annotations.c.created_at >= since)
         .order_by(annotations.c.created_at)
@@ -125,10 +139,14 @@ def matching_items(
         )
     rows = conn.execute(q).all()
     links = views.links_by_item(conn, [r.item_id for r in rows])
-    ok = [r for r in rows if passes(rules, links.get(r.item_id, []), r.event_type, r.source)]
+    ok = [
+        r
+        for r in rows
+        if passes(rules, links.get(r.item_id, []), r.event_type, r.source, bool(r.whale))
+    ]
     # priority signals first: the per-hour cap must not hold them behind ordinary news
-    ok.sort(key=lambda r: not is_priority(rules, r.source, r.event_type))
-    priority = {r.item_id for r in ok if is_priority(rules, r.source, r.event_type)}
+    ok.sort(key=lambda r: not is_priority(rules, r.source, r.event_type, bool(r.whale)))
+    priority = {r.item_id for r in ok if is_priority(rules, r.source, r.event_type, bool(r.whale))}
     return [r.item_id for r in ok], len(rows), priority
 
 

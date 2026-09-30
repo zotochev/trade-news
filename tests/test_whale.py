@@ -155,6 +155,10 @@ def test_second_pass_and_delivery_hold(engine, cfg):
         assert views.news_item(conn, ids["apple"])["payload_json"].get("whale") is None
     w = item["payload_json"]["whale"]
     assert w["takeover_threshold_pct"] == 30 and w["strength"] == "normal"
+    with engine.connect() as conn:  # a whale skips the importance / direction thresholds
+        strict = delivery.DeliveryRules(enabled=True, min_importance=5, require_direction=True)
+        passed, _, priority = delivery.matching_items(conn, strict, NOW, now=at)
+    assert passed == [ids["siris"]] and priority == {ids["siris"]}
     text = format_item(item)
     assert text.startswith("🟨🟨🟨\n<b>🐋 КИТ В КАПИТАЛЕ</b> · AGFB (Euronext Brussels)\n")
     assert "Доля — → 19.1% · порог 30% · цена 1.2 EUR" in text

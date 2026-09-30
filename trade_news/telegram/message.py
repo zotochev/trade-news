@@ -19,7 +19,9 @@ import html
 from datetime import date, datetime
 
 from trade_news import sectors
+from trade_news.annotation.whale import whale_of
 from trade_news.collectors.ff_calendar import parse_value
+from trade_news.collectors.form4 import _usd
 
 ARROW = {"bullish": "▲", "bearish": "▼", "neutral": "●"}
 CLASS_RU = {
@@ -149,8 +151,97 @@ def _facts(source: str, raw: dict) -> str | None:
     return None
 
 
+# --- whale in the capital ---------------------------------------------------------------
+
+WHALE_STRIPE = {"strong": "🟩🟩🟩", "normal": "🟨🟨🟨", "weak": "⬜⬜⬜"}
+WHALE_LABEL = {
+    "stake": "🐋 КИТ В КАПИТАЛЕ",
+    "bid": "🐋🎯 КИТ · ОФЕРТА",
+    "bid_revision": "🐋🔁 КИТ · ТОРГ",
+    "activist": "🐋📣 КИТ · АКТИВИСТ",
+    "insider": "🐋👤 КИТ · ИНСАЙДЕР",
+}
+SMALL_CAP_USD = 300e6
+BIG_MOVE_PCT = 10
+
+
+def _pct(x: float) -> str:
+    return f"{x:.2f}".rstrip("0").rstrip(".") + "%"
+
+
+def _cap(usd: float) -> str:
+    return f"${usd / 1e9:.1f} млрд" if usd >= 1e9 else f"${usd / 1e6:.0f} млн"
+
+
+def _whale_head(item: dict, w: dict) -> list[str]:
+    """Stripe and label lines. Market cap and the day's price move are shown only when the
+    data has them (not collected yet: no line, no badge)."""
+    esc = html.escape
+    label = WHALE_LABEL[w["whale_kind"]]
+    n = w.get("cluster_count") or 0
+    if w["whale_kind"] == "insider" and n >= 2:
+        label = label.replace("👤", f"👤×{n}")
+    _, _, _, links = _parts(item)
+    ticker = w.get("target_ticker") or (
+        _label(links[0]) if links and links[0].get("symbol") else None
+    )
+    head = f"<b>{esc(label)}</b>"
+    if ticker:
+        exchange = f" ({esc(w['exchange'])})" if w.get("exchange") else ""
+        head += f" · {esc(ticker)}{exchange}"
+    cap, move = w.get("market_cap_usd"), w.get("price_change_pct")
+    if cap:
+        head += f" · {_cap(cap)}"
+    badges = ("⚠️" if move is not None and move > BIG_MOVE_PCT else "") + (
+        "🧊" if cap and cap < SMALL_CAP_USD else ""
+    )
+    if badges:
+        head += f" {badges}"
+    return [WHALE_STRIPE.get(w.get("strength"), WHALE_STRIPE["normal"]), head]
+
+
+def _whale_details(w: dict) -> list[str]:
+    parts = []
+    if w["whale_kind"] == "insider":
+        who = " ".join(p for p in (w.get("buyer_roles"), w.get("buyer")) if p)
+        if w.get("amount_usd"):
+            parts.append(f"покупка на рынке {_usd(w['amount_usd'])}")
+        if who:
+            parts.append(who)
+    before, after = w.get("stake_before_pct"), w.get("stake_after_pct")
+    if after is not None and after < 100:  # 100%: a full takeover, the stake says nothing
+        parts.append(f"Доля {_pct(before) if before is not None else '—'} → {_pct(after)}")
+    if w.get("takeover_threshold_pct") is not None:
+        parts.append(f"порог {_pct(w['takeover_threshold_pct'])}")
+    if w.get("price_per_share"):
+        price = f"{w['price_per_share']:.2f}".rstrip("0").rstrip(".")
+        parts.append(f"цена {price} {w.get('currency') or ''}".rstrip())
+    lines = [" · ".join(html.escape(p) for p in parts)] if parts else []
+    if w.get("conditions"):
+        lines.append(f"Условия: {html.escape(w['conditions'])}")
+    return lines
+
+
+def _format_whale(item: dict, w: dict) -> str:
+    payload = item.get("payload_json") or {}
+    lines = [
+        *_whale_head(item, w),
+        html.escape(payload.get("summary") or item.get("title") or ""),
+        *_whale_details(w),
+    ]
+    if when := _when(item.get("relevance")):
+        lines.append(f"Когда: {when}")
+    if tags := sectors.hashtags(item.get("sectors") or []):
+        lines.append(html.escape(tags))
+    lines.append(f"Источник: {_source_link(item)}")
+    text = "\n".join(lines)
+    return text if len(text) <= MAX_LEN else text[: MAX_LEN - 1] + "…"
+
+
 def format_item(item: dict) -> str:
     """`item` as returned by views.news_item: payload_json, links, relevance, raw_json, …"""
+    if w := whale_of(item):
+        return _format_whale(item, w)
     esc = html.escape
     payload, raw, source, links = _parts(item)
     lines = [_head(item), esc(payload.get("summary") or item.get("title") or "")]
@@ -210,6 +301,13 @@ def format_digest(items: list[dict]) -> list[tuple[list[int], str]]:
     blocks = []
     for item in items:
         payload, raw, source, _ = _parts(item)
+        if w := whale_of(item):
+            summary = html.escape(payload.get("summary") or item.get("title") or "")
+            block = "\n".join(
+                [*_whale_head(item, w), f"{summary} ({_source_link(item)})", *_whale_details(w)]
+            )
+            blocks.append((item["id"], block[: MAX_LEN // 2]))
+            continue
         summary = html.escape(payload.get("summary") or item.get("title") or "")
         lines = [_head(item), f"{summary} ({_source_link(item)})"]
         if facts := _facts(source, raw):

@@ -22,6 +22,7 @@ import structlog
 from pydantic import BaseModel, Field
 
 from trade_news import views
+from trade_news.annotation import whale
 from trade_news.db.engine import insert_ignore
 from trade_news.db.schema import annotations, deliveries, items, settings
 from trade_news.http import RateLimiter
@@ -106,16 +107,23 @@ def passes(
 
 
 def matching_items(
-    conn: sa.Connection, rules: DeliveryRules, since: datetime
+    conn: sa.Connection, rules: DeliveryRules, since: datetime, now: datetime | None = None
 ) -> tuple[list[int], int, set[int]]:
     """(ids of items annotated since `since` that pass the rules, priority signals first, then
-    oldest first; total annotated; ids of the priority ones)."""
-    rows = conn.execute(
+    oldest first; total annotated; ids of the priority ones). With `now`, whale candidates
+    still waiting for the second pass are held back (at most whale.PENDING_MAX_WAIT), so they
+    don't go out without their whale formatting."""
+    q = (
         sa.select(annotations.c.item_id, views.EVENT_TYPE.label("event_type"), items.c.source)
         .join(items, items.c.id == annotations.c.item_id)
         .where(views.current_annotation(), annotations.c.created_at >= since)
         .order_by(annotations.c.created_at)
-    ).all()
+    )
+    if now is not None:
+        q = q.where(
+            sa.not_(sa.and_(whale.PENDING, annotations.c.created_at > now - whale.PENDING_MAX_WAIT))
+        )
+    rows = conn.execute(q).all()
     links = views.links_by_item(conn, [r.item_id for r in rows])
     ok = [r for r in rows if passes(rules, links.get(r.item_id, []), r.event_type, r.source)]
     # priority signals first: the per-hour cap must not hold them behind ordinary news
@@ -155,7 +163,7 @@ def run_delivery(
     cutoff = ts - timedelta(hours=rules.max_age_hours)
     with engine.begin() as conn:
         stats.skipped = _skip_stale(conn, cutoff)
-        item_ids, _, priority = matching_items(conn, rules, cutoff)
+        item_ids, _, priority = matching_items(conn, rules, cutoff, ts)
         recipients = subs.recipients(conn, root_chat_id)
     stats.candidates = len(item_ids)
     if not item_ids or not recipients:

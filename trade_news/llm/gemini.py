@@ -71,12 +71,22 @@ class GeminiClient:
     provider: str = "gemini"
 
     def annotate_batch(self, items: list[ItemForAnnotation]) -> list[Annotation]:
-        prompt = build_prompt(items, self.body_max_chars)
+        model, data = self.generate(
+            build_prompt(items, self.body_max_chars), response_json_schema(), len(items)
+        )
+        return self._to_annotations(model, data, items)
+
+    def generate(
+        self, prompt: str, schema: dict, n_items: int, prompt_version: str = PROMPT_VERSION
+    ) -> tuple[GeminiModel, dict]:
+        """One structured-output call over the models in order: (model, raw response).
+        Raises QuotaExhausted / LLMUnavailable. Other prompts (e.g. the whale pass) use it
+        too, recorded in llm_calls under their own prompt_version."""
         body = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
                 "responseMimeType": "application/json",
-                "responseJsonSchema": response_json_schema(),
+                "responseJsonSchema": schema,
             },
         }
         any_available = False
@@ -85,12 +95,23 @@ class GeminiClient:
                 continue
             any_available = True
             self._wait_for_rpm(model)
-            outcome = self._call(model, body, len(items))
+            outcome = self._call(model, body, n_items, prompt_version)
             if outcome.data is not None:
-                return self._to_annotations(model, outcome.data, items)
+                return model, outcome.data
         if not any_available:
             raise QuotaExhausted("all Gemini models are out of daily quota")
         raise LLMUnavailable("no Gemini model produced a response")
+
+    def generate_json(
+        self, prompt: str, schema: dict, n_items: int, prompt_version: str
+    ) -> tuple[str, dict | None]:
+        """(model name, parsed JSON answer or None when unparseable)."""
+        model, data = self.generate(prompt, schema, n_items, prompt_version)
+        try:
+            return model.name, json.loads(data["candidates"][0]["content"]["parts"][0]["text"])
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            log.warning("gemini_unparseable_response", model=model.name, error=repr(exc))
+            return model.name, None
 
     # --- quota -----------------------------------------------------------------------
 
@@ -110,7 +131,9 @@ class GeminiClient:
 
     # --- one model ---------------------------------------------------------------------
 
-    def _call(self, model: GeminiModel, body: dict, n_items: int) -> _Outcome:
+    def _call(
+        self, model: GeminiModel, body: dict, n_items: int, version: str = PROMPT_VERSION
+    ) -> _Outcome:
         for attempt in range(1, self.max_attempts + 1):
             started = self.now()
             try:
@@ -121,7 +144,7 @@ class GeminiClient:
                     timeout=self.timeout,
                 )
             except httpx.TransportError as exc:
-                self._record(model, started, "error", n_items, error=type(exc).__name__)
+                self._record(version, model, started, "error", n_items, error=type(exc).__name__)
                 self._backoff(attempt)
                 continue
 
@@ -129,29 +152,43 @@ class GeminiClient:
                 data = resp.json()
                 in_tok, out_tok = _tokens(data)
                 self._record(
-                    model, started, "ok", n_items, in_tok, out_tok, _cost(model, in_tok, out_tok)
+                    version,
+                    model,
+                    started,
+                    "ok",
+                    n_items,
+                    in_tok,
+                    out_tok,
+                    _cost(model, in_tok, out_tok),
                 )
                 return _Outcome(data)
 
             err = _error(resp)
             if resp.status_code == 429:
                 if _is_daily_quota(err):
-                    self._record(model, started, "quota_day", n_items, error=_msg(err))
+                    self._record(version, model, started, "quota_day", n_items, error=_msg(err))
                     log.warning("gemini_daily_quota_exhausted", model=model.name)
                     return _Outcome(None, model_done_for_today=True)
-                self._record(model, started, "quota_minute", n_items, error=_msg(err))
+                self._record(version, model, started, "quota_minute", n_items, error=_msg(err))
                 delay = _retry_delay(err)
                 log.warning("gemini_rate_limited", model=model.name, retry_in=delay)
                 self._backoff(attempt, at_least=delay)
                 continue
             if resp.status_code >= 500:
                 self._record(
-                    model, started, "error", n_items, error=f"{resp.status_code} {_msg(err)}"
+                    version,
+                    model,
+                    started,
+                    "error",
+                    n_items,
+                    error=f"{resp.status_code} {_msg(err)}",
                 )
                 self._backoff(attempt)
                 continue
             # 4xx other than 429 is our bug (bad schema, bad key): don't hammer, surface it
-            self._record(model, started, "error", n_items, error=f"{resp.status_code} {_msg(err)}")
+            self._record(
+                version, model, started, "error", n_items, error=f"{resp.status_code} {_msg(err)}"
+            )
             raise LLMUnavailable(f"Gemini {model.name}: {resp.status_code} {_msg(err)}")
         return _Outcome(None)
 
@@ -162,15 +199,16 @@ class GeminiClient:
         self.sleep(max(delay, at_least or 0))
 
     def _record(
-        self, model, started, status, n_items, in_tok=None, out_tok=None, cost=None, error=None
-    ):
+        self, version, model, started, status, n_items, in_tok=None, out_tok=None, cost=None,
+        error=None,
+    ):  # fmt: skip
         self.usage.record(
             CallRecord(
                 provider=self.provider,
                 model=model.name,
                 started_at=started,
                 status=status,
-                prompt_version=PROMPT_VERSION,
+                prompt_version=version,
                 n_items=n_items,
                 input_tokens=in_tok,
                 output_tokens=out_tok,

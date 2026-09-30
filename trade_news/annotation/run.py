@@ -17,6 +17,7 @@ import structlog
 
 from trade_news import sectors
 from trade_news.annotation import assets as asset_ref
+from trade_news.annotation import whale
 from trade_news.annotation.contract import (
     PROMPT_VERSION,
     Annotation,
@@ -157,6 +158,8 @@ def annotate_pending(
             break
     if stats.batches or stats.stopped:
         log.info("annotate_done", **asdict(stats), pending_seen=len(todo))
+    if hasattr(client, "generate_json"):  # second pass for whale candidates, same run
+        whale.resolve_pending(engine, client)
     return stats
 
 
@@ -213,6 +216,12 @@ def _store_valid(engine, by_id, results: list[Annotation], stats, now, previous=
 def _persist(
     conn, item: ItemForAnnotation, ann: Annotation, parsed: ItemAnnotation, stats, now
 ) -> None:
+    payload = dict(ann.payload)
+    w = whale.initial(
+        conn, item.id, item.source, item.title, item.body, parsed.event_type, item.published_at
+    )
+    if w:
+        payload["whale"] = w
     (annotation_id,) = insert_ignore(
         conn,
         annotations,
@@ -222,7 +231,7 @@ def _persist(
                 "model": ann.model,
                 "prompt_version": PROMPT_VERSION,
                 "created_at": now,
-                "payload_json": ann.payload,
+                "payload_json": payload,
                 "input_tokens": ann.input_tokens,
                 "output_tokens": ann.output_tokens,
                 "cost_estimate": ann.cost_estimate,

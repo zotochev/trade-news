@@ -3,7 +3,7 @@
 import sqlalchemy as sa
 
 from tests.test_admin import admin  # noqa: F401  (the fixture: admin app with two items)
-from trade_news.db.schema import items
+from trade_news.db.schema import annotations, items
 
 
 def test_openapi_and_docs(admin):  # noqa: F811
@@ -62,3 +62,20 @@ def test_one_item_and_sectors(admin, engine):  # noqa: F811
         tech["cycle"] == "sensitive"
         and {"key": "semiconductors", "name": "полупроводники"} in (tech["industries"])
     )
+
+
+def test_whale_block_with_partial_fields(admin, engine):  # noqa: F811
+    from trade_news.annotation import whale
+
+    with engine.begin() as conn:
+        item_id = conn.execute(sa.select(items.c.id).where(items.c.source_item_id == "1")).scalar()
+        aid = conn.execute(
+            sa.select(annotations.c.id).where(annotations.c.item_id == item_id)
+        ).scalar()
+        # an insider whale carries no exchange / listing fields at all
+        whale._store(conn, aid, {"whale": True, "whale_kind": "insider", "strength": "strong",
+                                 "cluster_count": 2, "amount_usd": 620000.0})  # fmt: skip
+    page = admin.get("/api/news?whale=true").json()
+    (item,) = page["items"]
+    assert item["whale"]["kind"] == "insider" and item["whale"]["exchange"] is None
+    assert item["whale"]["cluster_count"] == 2

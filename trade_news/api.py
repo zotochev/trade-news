@@ -70,21 +70,21 @@ class Whale(BaseModel):
 
     kind: Literal["stake", "bid", "bid_revision", "activist", "insider"]
     strength: Literal["strong", "normal", "weak"]
-    buyer: str | None
-    buyer_type: str | None
-    target_ticker: str | None
-    exchange: str | None
-    listing_country: str | None
-    stake_before_pct: float | None
-    stake_after_pct: float | None
-    takeover_threshold_pct: float | None
-    price_per_share: float | None
-    currency: str | None
+    buyer: str | None = None
+    buyer_type: str | None = None
+    target_ticker: str | None = None
+    exchange: str | None = None
+    listing_country: str | None = None
+    stake_before_pct: float | None = None
+    stake_after_pct: float | None = None
+    takeover_threshold_pct: float | None = None
+    price_per_share: float | None = None
+    currency: str | None = None
     amount_usd: float | None = Field(None, description="Insider purchases: total in USD")
     cluster_count: int | None = Field(None, description="Insider: purchase days in 30 days")
-    conditions: str | None
-    rumor: bool | None
-    denied: bool | None
+    conditions: str | None = None
+    rumor: bool | None = None
+    denied: bool | None = None
 
 
 class NewsItem(BaseModel):

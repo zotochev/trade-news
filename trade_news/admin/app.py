@@ -25,6 +25,7 @@ from pydantic import ValidationError
 
 from trade_news import delivery, sectors, views
 from trade_news.admin import data, market
+from trade_news.api import create_api
 from trade_news.config import Config
 
 log = structlog.get_logger()
@@ -86,6 +87,7 @@ TEMPLATES.env.globals.update(SECTORS=sectors.SECTORS, sector_name=sectors.name_r
 
 def create_app(deps: AdminDeps) -> FastAPI:
     app = FastAPI(title="trade-news admin", docs_url=None, redoc_url=None, openapi_url=None)
+    app.mount("/api", create_api(deps.engine))  # read-only API, own basic auth in nginx
 
     @app.middleware("http")
     async def same_origin_posts(request: Request, call_next):

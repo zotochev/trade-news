@@ -62,6 +62,25 @@ sudo nginx -t && sudo systemctl reload nginx
 показать админку. Пока самой админки ещё нет, вместо неё будет `502 Bad Gateway`: значит,
 nginx и пароль уже работают, просто проксировать пока некуда.
 
+## API для внешних потребителей
+
+Лента доступна только для чтения по адресу `https://kainode.duckdns.org/api/`:
+`/api/news`, `/api/news/{id}`, `/api/sectors`. Документация OpenAPI: `/api/docs`
+(страница Swagger, можно пробовать запросы) и `/api/openapi.json` (схема для генераторов
+клиентов). У API свой файл паролей: логин API не открывает админку, и наоборот.
+
+Включить (один раз, после обновления конфига в репозитории):
+
+```bash
+sudo htpasswd -c /etc/nginx/trade-news-api.htpasswd partner   # логин partner, пароль спросит
+sudo cp deploy/trade-news-admin.conf /etc/nginx/sites-available/trade-news-admin
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Ещё логины: `sudo htpasswd /etc/nginx/trade-news-api.htpasswd другой_логин` (без `-c`),
+отозвать: `sudo htpasswd -D /etc/nginx/trade-news-api.htpasswd логин`. Проверка:
+`curl -u partner:пароль 'https://kainode.duckdns.org/api/news?limit=1'`.
+
 ## Продление сертификата
 
 Сертификат действует 90 дней. Certbot сам ставит таймер и продлевает его заранее.

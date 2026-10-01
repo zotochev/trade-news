@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8"?><edgarSubmission xmlns="http://www.sec.gov/edgar/schedule13D" xmlns:com="http://www.sec.gov/edgar/common">
+  <schemaVersion>X0202</schemaVersion>
+<headerData>
+    <submissionType>SCHEDULE 13D</submissionType>
+    <filerInfo>
+      <filer>
+        <filerCredentials>
+          <!-- Field: Pseudo-Tag; ID: Name; Data: NCCS Management, LLC -->
+          <cik>0002157786</cik>
+          <ccc>XXXXXXXX</ccc>
+        </filerCredentials>
+      </filer>
+      <liveTestFlag>LIVE</liveTestFlag>
+
+
+
+    </filerInfo>
+  </headerData>
+  <formData>
+    <coverPageHeader>
+      <securitiesClassTitle>Common Stock, par value $0.0001 per share</securitiesClassTitle>
+      <dateOfEvent>09/23/2026</dateOfEvent>
+      <previouslyFiledFlag>false</previouslyFiledFlag>
+      <issuerInfo>
+        <issuerCIK>0001846416</issuerCIK>
+        <issuerCusips>
+          <issuerCusipNumber>68253E100</issuerCusipNumber>
+        </issuerCusips>
+        <issuerName>ONE Nuclear Energy Inc. (f/k/a Hennessy Capital Investment Corp. VII)</issuerName>
+        <address>
+          <com:street1>700 S. Rosemary Avenue, Suite 204</com:street1>
+          <com:city>West Palm Beach</com:city>
+          <com:stateOrCountry>FL</com:stateOrCountry>
+          <com:zipCode>33401</com:zipCode>
+        </address>
+      </issuerInfo>
+      <authorizedPersons>
+        <notificationInfo>
+          <personName>Osman H. Ahmed</personName>
+          <personPhoneNum>(978) 376-9240</personPhoneNum>
+          <personAddress>
+            <com:street1>NCCS Management, LLC</com:street1>
+            <com:street2>230 Park Avenue, 3rd Floor West</com:street2>
+            <com:city>New York</com:city>
+            <com:stateOrCountry>NY</com:stateOrCountry>
+            <com:zipCode>10169</com:zipCode>
+          </personAddress>
+        </notificationInfo>
+      </authorizedPersons>
+    </coverPageHeader>
+    <reportingPersons>
+      <reportingPersonInfo>
+        <reportingPersonCIK>0002157786</reportingPersonCIK>
+        <reportingPersonNoCIK>N</reportingPersonNoCIK>
+        <reportingPersonName>NCCS Management, LLC</reportingPersonName>
+        <memberOfGroup>b</memberOfGroup>
+        <fundType>AF</fundType>
+        <fundType>OO</fundType>
+        <legalProceedings>N</legalProceedings>
+        <citizenshipOrOrganization>DE</citizenshipOrOrganization>
+        <soleVotingPower>0.00</soleVotingPower>
+        <sharedVotingPower>4987103.00</sharedVotingPower>
+        <soleDispositivePower>0.00</soleDispositivePower>
+        <sharedDispositivePower>4987103.00</sharedDispositivePower>
+        <aggregateAmountOwned>4987103.00</aggregateAmountOwned>
+        <isAggregateExcludeShares>N</isAggregateExcludeShares>
+        <percentOfClass>4.6</percentOfClass>
+        <typeOfReportingPerson>IA</typeOfReportingPerson>
+        <typeOfReportingPerson>OO</typeOfReportingPerson>
+        <commentContent>* Shares reported herein represent Common Stock of ONE Nuclear Energy Inc. (the "Issuer") held by New Circle Capital Solutions LP, a Delaware limited partnership (the "Fund"). The Fund is a private investment vehicle for which NCCS GP, LLC, a Delaware limited liability company (the "General Partner"), serves as the general partner, and NCCS Management, LLC, a Delaware limited liability company (the "Investment Manager"), serves as the investment manager. Osman H. Ahmed and Walter V. Arnold serve as Managing Partners of the Investment Manager (each of the foregoing, a "Reporting Person" and, collectively, the "Reporting Persons"). (1) Represents 4,987,103 shares of Common Stock held by the Reporting Persons. (2) Based on 108,258,979 shares of Common Stock of the Issuer that were outstanding as of September 23, 2026. The amount of shares outstanding was based upon a statement in the Issuer's Form 8-K, filed on September 29, 2026.</commentContent>
+      </reportingPersonInfo>
+      <reportingPersonInfo>
+        <reportingPersonCIK>0002140207</reportingPersonCIK>
+        <reportingPersonNoCIK>N</reportingPersonNoCIK>
+        <reportingPersonName>New Circle Capital Solutions LP</reportingPersonName>
+        <memberOfGroup>b</memberOfGroup>
+        <fundType>WC</fundType>
+        <legalProceedings>N</legalProceedings>
+        <citizenshipOrOrganization>DE</citizenshipOrOrganization>
+        <soleVotingPower>0.00</soleVotingPower>
+        <sharedVotingPower>4987103.00</sharedVotingPower>
+        <soleDispositivePower>0.00</soleDispositivePower>
+        <sharedDispositivePower>4987103.00</sharedDispositivePower>
+        <aggregateAmountOwned>4987103.00</aggregateAmountOwned>
+        <isAggregateExcludeShares>N</isAggregateExcludeShares>
+        <percentOfClass>4.6</percentOfClass>
+        <typeOfReportingPerson>PN</typeOfReportingPerson>
+        <commentContent>* Shares reported herein represent Common Stock of ONE Nuclear Energy Inc. (the "Issuer") held by New Circle Capital Solutions LP, a Delaware limited partnership (the "Fund"). The Fund is a private investment vehicle for which NCCS GP, LLC, a Delaware limited liability company (the "General Partner"), serves as the general partner, and NCCS Management, LLC, a Delaware limited liability company (the "Investment Manager"), serves as the investment manager. Osman H. Ahmed and Walter V. Arnold serve as Managing Partners of the Investment Manager (each of the foregoing, a "Reporting Person" and, collectively, the "Reporting Persons"). (1) Represents 4,987,103 shares of Common Stock held by the Reporting Persons. (2) Based on 108,258,979 shares of Common Stock of the Issuer that were outstanding as of September 23, 2026. The amount of shares outstanding was based upon a statement in the Issuer's Form 8-K, filed on September 29, 2026.</commentContent>
+      </reportingPersonInfo>
+      <reportingPersonInfo>
+        <reportingPersonNoCIK>Y</reportingPersonNoCIK>
+        <reportingPersonName>NCCS GP, LLC</reportingPersonName>
+        <memberOfGroup>b</memberOfGroup>
+        <fundType>AF</fundType>
+        <fundType>OO</fundType>
+        <legalProceedings>N</legalProceedings>
+        <citizenshipOrOrganization>DE</citizenshipOrOrganization>
+        <soleVotingPower>0.00</soleVotingPower>
+        <sharedVotingPower>4987103.00</sharedVotingPower>
+        <soleDispositivePower>0.00</soleDispositivePower>
+        <sharedDispositivePower>4987103.00</sharedDispositivePower>
+        <aggregateAmountOwned>4987103.00</aggregateAmountOwned>
+        <isAggregateExcludeShares>N</isAggregateExcludeShares>
+        <percentOfClass>4.6</percentOfClass>
+        <typeOfReportingPerson>OO</typeOfReportingPerson>
+        <commentContent>* Shares reported herein represent Common Stock of ONE Nuclear Energy Inc. (the "Issuer") held by New Circle Capital Solutions LP, a Delaware limited partnership (the "Fund"). The Fund is a private investment vehicle for which NCCS GP, LLC, a Delaware limited liability company (the "General Partner"), serves as the general partner, and NCCS Management, LLC, a Delaware limited liability company (the "Investment Manager"), serves as the investment manager. Osman H. Ahmed and Walter V. Arnold serve as Managing Partners of the Investment Manager (each of the foregoing, a "Reporting Person" and, collectively, the "Reporting Persons"). (1) Represents 4,987,103 shares of Common Stock held by the Reporting Persons. (2) Based on 108,258,979 shares of Common Stock of the Issuer that were outstanding as of September 23, 2026. The amount of shares outstanding was based upon a statement in the Issuer's Form 8-K, filed on September 29, 2026.</commentContent>
+      </reportingPersonInfo>
+      <reportingPersonInfo>
+        <reportingPersonNoCIK>Y</reportingPersonNoCIK>
+        <reportingPersonName>Walter V. Arnold</reportingPersonName>
+        <memberOfGroup>b</memberOfGroup>
+        <fundType>AF</fundType>
+        <fundType>OO</fundType>
+        <legalProceedings>N</legalProceedings>
+        <citizenshipOrOrganization>X1</citizenshipOrOrganization>
+        <soleVotingPower>0.00</soleVotingPower>
+        <sharedVotingPower>4987103.00</sharedVotingPower>
+        <soleDispositivePower>0.00</soleDispositivePower>
+        <sharedDispositivePower>4987103.00</sharedDispositivePower>
+        <aggregateAmountOwned>4987103.00</aggregateAmountOwned>
+        <isAggregateExcludeShares>N</isAggregateExcludeShares>
+        <percentOfClass>4.6</percentOfClass>
+        <typeOfReportingPerson>IN</typeOfReportingPerson>
+        <typeOfReportingPerson>HC</typeOfReportingPerson>
+        <commentContent>* Shares reported herein represent Common Stock of ONE Nuclear Energy Inc. (the "Issuer") held by New Circle Capital Solutions LP, a Delaware limited partnership (the "Fund"). The Fund is a private investment vehicle for which NCCS GP, LLC, a Delaware limited liability company (the "General Partner"), serves as the general partner, and NCCS Management, LLC, a Delaware limited liability company (the "Investment Manager"), serves as the investment manager. Osman H. Ahmed and Walter V. Arnold serve as Managing Partners of the Investment Manager (each of the foregoing, a "Reporting Person" and, collectively, the "Reporting Persons"). (1) Represents 4,987,103 shares of Common Stock held by the Reporting Persons. (2) Based on 108,258,979 shares of Common Stock of the Issuer that were outstanding as of September 23, 2026. The amount of shares outstanding was based upon a statement in the Issuer's Form 8-K, filed on September 29, 2026.</commentContent>
+      </reportingPersonInfo>
+      <reportingPersonInfo>
+        <reportingPersonNoCIK>Y</reportingPersonNoCIK>
+        <reportingPersonName>Osman H. Ahmed</reportingPersonName>
+        <memberOfGroup>b</memberOfGroup>
+        <fundType>AF</fundType>
+        <fundType>OO</fundType>
+        <legalProceedings>N</legalProceedings>
+        <citizenshipOrOrganization>X1</citizenshipOrOrganization>
+        <soleVotingPower>0.00</soleVotingPower>
+        <sharedVotingPower>4987103.00</sharedVotingPower>
+        <soleDispositivePower>0.00</soleDispositivePower>
+        <sharedDispositivePower>4987103.00</sharedDispositivePower>
+        <aggregateAmountOwned>4987103.00</aggregateAmountOwned>
+        <isAggregateExcludeShares>N</isAggregateExcludeShares>
+        <percentOfClass>4.6</percentOfClass>
+        <typeOfReportingPerson>IN</typeOfReportingPerson>
+        <typeOfReportingPerson>HC</typeOfReportingPerson>
+        <commentContent>* Shares reported herein represent Common Stock of ONE Nuclear Energy Inc. (the "Issuer") held by New Circle Capital Solutions LP, a Delaware limited partnership (the "Fund"). The Fund is a private investment vehicle for which NCCS GP, LLC, a Delaware limited liability company (the "General Partner"), serves as the general partner, and NCCS Management, LLC, a Delaware limited liability company (the "Investment Manager"), serves as the investment manager. Osman H. Ahmed and Walter V. Arnold serve as Managing Partners of the Investment Manager (each of the foregoing, a "Reporting Person" and, collectively, the "Reporting Persons"). (1) Represents 4,987,103 shares of Common Stock held by the Reporting Persons. (2) Based on 108,258,979 shares of Common Stock of the Issuer that were outstanding as of September 23, 2026. The amount of shares outstanding was based upon a statement in the Issuer's Form 8-K, filed on September 29, 2026.</commentContent>
+      </reportingPersonInfo>
+    </reportingPersons>
+    <items1To7>
+      <item1>
+        <securityTitle>Common Stock, par value $0.0001 per share</securityTitle>
+        <issuerName>ONE Nuclear Energy Inc. (f/k/a Hennessy Capital Investment Corp. VII)</issuerName>
+        <issuerPrincipalAddress>
+          <com:street1>700 S. Rosemary Avenue, Suite 204</com:street1>
+          <com:city>West Palm Beach</com:city>
+          <com:stateOrCountry>FL</com:stateOrCountry>
+          <com:zipCode>33401</com:zipCode>
+        </issuerPrincipalAddress>
+        <commentText>On September 23, 2026 (the "Closing Date"), HVII completed its previously announced business combination with ONE Nuclear Energy LLC (the "Business Combination"). On the Closing Date, HVII domesticated as a Delaware corporation (the "Domestication"), in connection with which each Class A ordinary share of HVII (the "Class A Ordinary Shares") issued and outstanding immediately prior to the Domestication converted, on a one-for-one basis, into one share of Common Stock. The securities reported herein were acquired as Class A Ordinary Shares immediately prior to the Domestication and are reported as the shares of Common Stock into which they converted. The Issuer succeeded to HVII's registration under Section 12(b) of the Securities Exchange Act of 1934, as amended (the "Act"), pursuant to Rule 12g-3 thereunder.</commentText>
+      </item1>
+      <item2>
+        <filingPersonName>This Statement is being filed jointly by: (i) New Circle Capital Solutions LP, a Delaware limited partnership (the "Fund"); (ii) NCCS GP, LLC, a Delaware limited liability company, the general partner of the Fund (the "General Partner") (iii) NCCS Management, LLC, a Delaware limited liability company, the investment manager of the Fund (the "Investment Manager"); (iv) Walter V. Arnold, a citizen of the United States and the co-managing partner of the Investment Manager ("Mr. Arnold"); and (v) Osman H. Ahmed, a citizen of the United States and the co-managing partner of the Investment Manager ("Mr. Ahmed" and, together with the Fund, the General Partner, the Investment Manager, and Mr. Arnold, the "Reporting Persons"). By virtue of these relationships, the Investment Manager, Mr. Arnold, and Mr. Ahmed may be deemed to beneficially own the Common Stock owned directly by the Fund. This report shall not be deemed an admission that the Reporting Persons are beneficial owners of Common Stock for purposes of Section 13 of the Exchange Act 1934, as amended, or for any other purpose. Each of the Reporting Persons disclaims beneficial ownership of the shares of Common Stock reported herein except to the extent of the Reporting Person's pecuniary interest therein.</filingPersonName>
+        <principalBusinessAddress>The principal business address of each Reporting Person is 230 Park Avenue, 3rd Floor West, New York, NY 10169.</principalBusinessAddress>
+        <principalJob>The principal business of the Fund is acquiring, holding, and disposing of investments in securities. The principal business of the Investment Manager is providing investment management services to the Fund and any other clients. The Investment Manager is currently an exempt reporting adviser with the SEC, relying on the Private Fund Adviser exemption under Section 203(m) of the Investment Advisers Act of 1940 and Rule 203(m)-1 thereunder. The Investment Manager is not registered as an investment adviser with the Securities and Exchange Commission or any state securities authority. The present principal occupation of Mr. Arnold and Mr. Ahmed is co-managing partner of the Investment Manager.</principalJob>
+        <hasBeenConvicted>During the last five years, none of the Reporting Persons, or, to the Reporting Persons' best knowledge, any of their respective directors, executive officers, or controlling persons, as the case may be, has been convicted in a criminal proceeding (excluding traffic violations and other similar misdemeanors).</hasBeenConvicted>
+        <convictionDescription>During the last five years, none of the Reporting Persons, or, to the Reporting Persons' best knowledge, any of their respective directors, executive officers, or controlling persons, as the case may be, is or has been a party to a civil proceeding of a judicial or administrative body of competent jurisdiction and as a result of such proceeding, was or is subject to a judgment, decree, or final order enjoining future violations of, or prohibiting or mandating activities subject to, federal or state securities law or finding any violation with respect to such laws.</convictionDescription>
+        <citizenship>The Fund - Delaware limited partnership
+The General Partner - Delaware limited liability company
+The Investment Manager - Delaware limited liability company
+Mr. Arnold - citizen of the United States of America
+Mr. Ahmed - citizen of the United States of America</citizenship>
+      </item2>
+      <item3>
+        <fundsSource>On September 23, 2026, pursuant to the Forward Purchase Agreement, dated September 22, 2026, by and among HVII, ONE Nuclear Energy LLC and the Fund (the "Forward Purchase Agreement"), the Fund acquired 4,987,103 Class A Ordinary Shares from third-party holders that had previously submitted such shares for redemption in connection with the Business Combination, in each case pursuant to reversals of such redemption requests effected with HVII's consent, for an aggregate purchase price of approximately $52,863,292 (approximately $10.60 per share). The purchases were made pursuant to the Forward Purchase Agreement described in Item 6, funded initially from the working capital of the Fund; on September 24, 2026, following the closing of the Business Combination, the Fund received a prepayment from the Issuer in the amount of approximately $53,185,758 pursuant to the Forward Purchase Agreement. No funds are being borrowed by the Reporting Persons to fund the acquisition of the shares of the Issuer's Common Stock or the Class A Ordinary Shares, although the Reporting Persons may borrow funds in the future and may pledge any or all of such shares as collateral against such borrowings.</fundsSource>
+      </item3>
+      <item4>
+        <transactionPurpose>The Fund acquired the securities reported herein pursuant the Forward Purchase Agreement, entered into for the purpose of acting as a potential financing pathway for the Issuer. The information set forth in Items 3, 5 and 6 of this Statement is incorporated by reference into this Item 4.
+
+Except as set forth in this Statement, the Reporting Persons have no present plans or proposals that relate to or would result in any of the actions described in subparagraphs (a) through (j) of Item 4 of Schedule 13D. Notwithstanding the foregoing, the Reporting Persons may determine, from time to time in the future, based on market and general economic conditions, the business affairs and financial conditions of the Issuer, the capital requirements of the Fund (or other Reporting Persons), the availability of securities at favorable prices and other alternative investment opportunities available to the Reporting Persons, and other factors that the Reporting Persons may deem relevant, to acquire additional shares of Common Stock and/or other equity, debt, notes, instruments or other securities of the Issuer (collectively, "Securities") in the open market, in privately negotiated transactions, or otherwise, or to sell some or all of the Securities they now hold or hereafter acquire as set forth above or otherwise. The Reporting Persons reserve the right to change their intention with respect to, and pursue plans or proposals that relate to or could result in, any and all matters referred to in subparagraphs (a) - (j) of this Item 4 to Schedule 13D promulgated under the Act.</transactionPurpose>
+      </item4>
+      <item5>
+        <percentageOfClassSecurities>As of September 30, 2026, the Reporting Persons beneficially own the number of Common Stock set forth below. Percentage ownership is based on 108,258,979 shares of Common Stock of the Issuer that were outstanding as of September 23, 2026. The amount of shares outstanding was based upon a statement in the Issuer's Form 8-K, filed on September 29, 2026.
+
+The applicable Reporting Persons may be deemed to beneficially own an aggregate of 4,987,103 shares of Common Stock. These shares of Common Stock represent approximately 4.6% of the outstanding shares of Common Stock of the Issuer. By virtue of relationships between the Reporting Persons (i.e., Mr. Arnold and Mr. Ahmed's authority to direct the affairs of the Investment Manager, including the voting and disposition of shares of Common Stock held by all Reporting Persons), the Reporting Persons may be deemed to have sole voting and dispositive power with respect to the shares owned directly by the Fund.
+
+At the time of the acquisition on September 23, 2026, and prior to the consummation of the transactions effected at the closing of the Business Combination, the 4,987,103 Class A Ordinary Shares acquired by the Fund represented approximately 25.4% of the 19,690,000 Class A Ordinary Shares then outstanding as reported by HVII. As a result of closing of the Business Combination on September 23, 2026, the Reporting Persons' beneficial ownership was reduced to less than 5% of the outstanding Common Stock on that date.</percentageOfClassSecurities>
+        <numberOfShares>The Fund has the shared power to vote or direct 4,987,103 of Common Stock; has the sole power to vote or direct the vote of 0 shares of Common Stock; has the shared power to dispose or direct the disposition of 4,987,103 of Common Stock; and has the sole power to dispose or direct the disposition of 0 shares of Common Stock. The Investment Manager has the shared power to vote or direct 4,987,103 of Common Stock; has the sole power to vote or direct the vote of 0 shares of Common Stock; has the shared power to dispose or direct the disposition of 4,987,103 of Common Stock; and has the sole power to dispose or direct the disposition of 0 shares of Common Stock.  Mr. Arnold has the shared power to vote or direct 4,987,103 of Common Stock; has the sole power to vote or direct the vote of 0 shares of Common Stock; has the shared power to dispose or direct the disposition of 4,987,103 of Common Stock; and has the sole power to dispose or direct the disposition of 0 shares of Common Stock. Mr. Ahmed has the shared power to vote or direct 4,987,103 of Common Stock; has the sole power to vote or direct the vote of 0 shares of Common Stock; has the shared power to dispose or direct the disposition of 4,987,103 of Common Stock; and has the sole power to dispose or direct the disposition of 0 shares of Common Stock.</numberOfShares>
+        <transactionDesc>Except for the entry into the Forward Purchase Agreement on September 22, 2026 and the acquisition of 4,987,103 Class A Ordinary Shares on September 23, 2026 described in Item 3, effected in a single transaction, the Reporting Persons have not effected any transactions in the Class A Ordinary Shares or the Common Stock during the past 60 days.</transactionDesc>
+        <listOfShareholders>No person other than the Reporting Persons is known to have the right to receive or the power to direct the receipt of dividends from, or the proceeds from the sale of, the securities reported herein, except that the Issuer may have rights with respect to certain shares pursuant to the Forward Purchase Agreement.</listOfShareholders>
+        <date5PercentOwnership>The Reporting Persons ceased to be the beneficial owners of more than five percent of the Common Stock on September 23, 2026.</date5PercentOwnership>
+      </item5>
+      <item6>
+        <contractDescription>On September 22, 2026, the Fund entered into the Forward Purchase Agreement with HVII and ONE Nuclear Energy LLC. Under that agreement, the Fund agreed to purchase up to 5,000,000 Class A Ordinary Shares from third-party holders that had submitted such shares for redemption. The Fund also agreed to reverse such redemption requests relating to the purchased shares and to waive its redemption rights with respect to those shares. The Forward Purchase Agreement provided that the Fund will be prepaid an aggregate cash amount (the "Prepayment Amount") equal to (i) the number of Class A Ordinary Shares purchased by the Fund, multiplied by (ii) the per-share redemption price at the closing of the Business Combination (the "Initial Price"). The Fund will be paid the Prepayment Amount on the earlier of (a) one (1) business day after the closing of the Business Combination and (b) the date any assets from HVII's trust account are disbursed in connection with the Business Combination. From time to time and on any business day on which Nasdaq and commercial banks in the City of New York are open for business (an "Exchange Business Day"), following the closing of the Business Combination (any such date, an "OET Date"), and subject to the terms and conditions therein, the Fund may, in its sole discretion, terminate the Transaction in whole or in part with respect to any number of Class A Ordinary Shares by giving notice of such termination and the specified number of Class A Ordinary Shares. The foregoing description of the Forward Purchase Agreement does not purport to be complete and is qualified in its entirety by reference to the full text of the Forward Purchase Agreement, a copy of which is filed as Exhibit B hereto and is incorporated herein by reference.
+
+Except as described herein, there are no contracts, arrangements, understandings or relationships (legal or otherwise) among the Reporting Persons or between the Reporting Persons and any other person with respect to any securities of the Issuer.</contractDescription>
+      </item6>
+      <item7>
+        <filedExhibits>Exhibit A - Joint Filing Agreement, dated as of September 30, 2026, by and among the Reporting Persons.
+
+Exhibit B - Forward Purchase Agreement, dated September 22, 2026, by and among Hennessy Capital Investment Corp. VII, ONE Nuclear Energy LLC and New Circle Capital Solutions LP.</filedExhibits>
+      </item7>
+    </items1To7>
+    <signatureInfo>
+      <signaturePerson>
+        <signatureReportingPerson>NCCS Management, LLC</signatureReportingPerson>
+        <signatureDetails>
+          <signature>/s/ Osman H. Ahmed</signature>
+          <title>Osman H. Ahmed Co-Managing Partner</title>
+          <date>09/30/2026</date>
+        </signatureDetails>
+      </signaturePerson>
+      <signaturePerson>
+        <signatureReportingPerson>New Circle Capital Solutions LP</signatureReportingPerson>
+        <signatureDetails>
+          <signature>/s/ Osman H. Ahmed</signature>
+          <title>Osman H. Ahmed Co-Managing Partner of the Investment Manager of the Fund</title>
+          <date>09/30/2026</date>
+        </signatureDetails>
+      </signaturePerson>
+      <signaturePerson>
+        <signatureReportingPerson>NCCS GP, LLC</signatureReportingPerson>
+        <signatureDetails>
+          <signature>/s/ Osman H. Ahmed</signature>
+          <title>Osman H. Ahmed Co-Managing Partner of the Investment Manager of the Fund</title>
+          <date>09/30/2026</date>
+        </signatureDetails>
+      </signaturePerson>
+      <signaturePerson>
+        <signatureReportingPerson>Walter V. Arnold</signatureReportingPerson>
+        <signatureDetails>
+          <signature>/s/ Walter V. Arnold</signature>
+          <title>Walter V. Arnold</title>
+          <date>09/30/2026</date>
+        </signatureDetails>
+      </signaturePerson>
+      <signaturePerson>
+        <signatureReportingPerson>Osman H. Ahmed</signatureReportingPerson>
+        <signatureDetails>
+          <signature>/s/ Osman H. Ahmed</signature>
+          <title>Osman H. Ahmed</title>
+          <date>09/30/2026</date>
+        </signatureDetails>
+      </signaturePerson>
+    </signatureInfo>
+  </formData>
+
+</edgarSubmission>

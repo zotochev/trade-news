@@ -23,7 +23,7 @@ import structlog
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from trade_news import views
-from trade_news.annotation.assets import norm
+from trade_news.annotation.assets import equity_by_cik, norm
 from trade_news.annotation.contract import LLMUnavailable, QuotaExhausted
 from trade_news.db.schema import annotations, item_assets, items, raw_items
 
@@ -124,6 +124,9 @@ Fields (null when the text doesn't say; never guess numbers):
 - conditions: key conditions in Russian, one short line (financing, approvals, deadline);
 - rumor=true for reports that are not confirmed by the parties ("sources say", "considering",
   "weighing", "may"); denied=true when a party denies it.
+SEC Schedule 13D filings (title "Schedule 13D …"): the body carries the filed facts. A filing
+of a new holding or a raised one is a stake; a purpose aimed at the board, a sale or
+"strategic alternatives" is activist; a filing about an offer for the issuer is a bid.
 Base everything only on the given text."""
 
 
@@ -309,7 +312,12 @@ def initial(conn: sa.Connection, item_id: int, source: str, title: str, body: st
             .join(items, items.c.raw_item_id == raw_items.c.id)
             .where(items.c.id == item_id)
         ).scalar()
-        return insider(conn, raw or {}, at)
+        raw = raw or {}
+        if raw.get("schedule13d"):  # a stake filing: the second pass reads its purpose
+            pct = _13d_pct(raw["schedule13d"])
+            ok = pct is not None and MIN_STAKE_PCT <= pct < MAX_STAKE_PCT
+            return {"pending": True, "version": WHALE_VERSION} if ok else None
+        return insider(conn, raw, at)
     if is_candidate(source, title, body, event_type):
         return {"pending": True, "version": WHALE_VERSION}
     return None
@@ -332,8 +340,10 @@ def resolve_pending(engine: sa.Engine, client, batch_size: int = 20, limit: int 
                     items.c.body,
                     items.c.published_at,
                     annotations.c.payload_json["summary"].as_string().label("summary"),
+                    raw_items.c.raw_json,
                 )
                 .join(items, items.c.id == annotations.c.item_id)
+                .join(raw_items, raw_items.c.id == items.c.raw_item_id)
                 .where(PENDING)
                 .order_by(annotations.c.id.desc())
                 .limit(limit)
@@ -359,17 +369,80 @@ def resolve_pending(engine: sa.Engine, client, batch_size: int = 20, limit: int 
         with engine.begin() as conn:
             for r in batch:
                 a = answers.get(r["id"])
+                filing = (r["raw_json"] or {}).get("schedule13d")
+                if a and filing:  # a 13D is itself the new step, by an SEC-registered issuer
+                    a = a.model_copy(update={"target_listed": True, "new_step": True})
                 w = (
                     from_answer(a, model)
                     if a
                     else {"whale": False, "version": WHALE_VERSION, "error": "no valid answer"}
                 )
+                if filing and w.get("whale"):
+                    apply_13d(conn, w, filing, r["published_at"])
                 apply_competing(conn, r["id"], w, r["published_at"])
                 _store(conn, r["annotation_id"], w)
                 done += 1
     if rows:
         log.info("whale_pass_done", candidates=len(rows), resolved=done)
     return done
+
+
+MIN_STAKE_PCT, MAX_STAKE_PCT = 5, 50
+
+
+def _13d_pct(filing: dict) -> float | None:
+    values = [p["pct"] for p in filing.get("persons") or [] if p.get("pct") is not None]
+    return max(values) if values else None
+
+
+def _13d_filer(filing: dict) -> str | None:
+    persons = filing.get("persons") or []
+    return max(persons, key=lambda p: p.get("pct") or 0)["name"] if persons else None
+
+
+def previous_13d_pct(conn: sa.Connection, filing: dict, at: datetime) -> float | None:
+    """The holding in the latest earlier 13D of the same filer (any reporting person in common)
+    at the same issuer, from our own data; None when we haven't seen one."""
+    names = {p["name"] for p in filing.get("persons") or []}
+    rows = conn.execute(
+        sa.select(raw_items.c.raw_json)
+        .where(
+            raw_items.c.source == "sec_edgar",
+            raw_items.c.published_at < at,
+            raw_items.c.raw_json[("schedule13d", "issuer_cik")].as_string()
+            == filing.get("issuer_cik"),
+        )
+        .order_by(raw_items.c.published_at.desc())
+    ).scalars()
+    for raw in rows:
+        other = raw.get("schedule13d") or {}
+        if names & {p["name"] for p in other.get("persons") or []}:
+            return _13d_pct(other)
+    return None
+
+
+def apply_13d(conn: sa.Connection, w: dict, filing: dict, at: datetime) -> None:
+    """The filed numbers win over the LLM's reading. A lower or unchanged holding is no whale
+    (an amendment reports the new holding, the previous one comes from our data)."""
+    after = _13d_pct(filing)
+    before = previous_13d_pct(conn, filing, at) if filing.get("amendment_no") is not None else None
+    if (
+        w.get("whale_kind") == "stake"
+        and before is not None
+        and after is not None
+        and (after <= before)
+    ):
+        w.clear()
+        w.update({"whale": False, "version": WHALE_VERSION, "reason": "13D: holding not raised"})
+        return
+    w["stake_after_pct"], w["stake_before_pct"] = after, before
+    w["buyer"] = w.get("buyer") or _13d_filer(filing)
+    if not w.get("target_ticker") and filing.get("issuer_cik"):
+        w["target_ticker"] = equity_by_cik(conn, filing["issuer_cik"])
+    w["listing_country"] = w.get("listing_country") or "US"
+    w["takeover_threshold_pct"] = takeover_threshold(w["listing_country"])
+    w["source"] = "13d"
+    w["strength"] = strength(w)
 
 
 def apply_competing(conn: sa.Connection, item_id: int, w: dict, at: datetime) -> None:

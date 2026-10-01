@@ -40,7 +40,7 @@ sources:
     interval_seconds: 120
     rate_limit: sec
     params:
-      forms: ["8-K", "10-Q", "10-K", "4"]
+      forms: ["8-K", "10-Q", "10-K", "4", "SCHEDULE 13D"]  # 13D: holdings > 5% (13D/A comes with it)
       max_pages: 5       # 100 entries per page; stops early when it reaches known filings
       form4_details: true              # fetch each new Form 4 and parse the trades (1 request each)
       form4_max_details_per_run: 150

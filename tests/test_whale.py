@@ -236,3 +236,52 @@ def test_competing_bidder_becomes_bid_revision(engine, cfg):
         rival = {"whale": True, "whale_kind": "bid", "buyer": "Simplify Asset Management"}
         whale.apply_competing(conn, ids["simplify"], rival, at)
         assert rival["whale_kind"] == "bid_revision" and rival["strength"] == "strong"
+
+
+def filing_13d(pct, amendment_no=None, filer="Activist Partners LP"):
+    return {
+        "form": "SCHEDULE 13D/A" if amendment_no is not None else "SCHEDULE 13D",
+        "cik": "0000320193",
+        "schedule13d": {
+            "amendment_no": amendment_no, "issuer_cik": "0000320193", "issuer_name": "Apple Inc.",
+            "issuer_state": "CA", "event_date": "2026-09-30", "funds_source": None,
+            "purpose": "Investment", "transactions": None,
+            "persons": [{"name": filer, "cik": None, "pct": pct, "shares": 1.0, "types": ["PN"]}],
+        },
+    }  # fmt: skip
+
+
+def test_schedule_13d_stakes(engine, cfg):
+    with engine.begin() as conn:
+        ref.upsert_assets(conn, ref.sec_equities(SEC_TICKERS), "sec")
+        filings = [
+            ("d1", filing_13d(6.0), 0),
+            ("d2", filing_13d(8.0, 1), 1),
+            ("d3", filing_13d(7.0, 2), 2),
+            ("d4", filing_13d(4.6), 2),
+        ]
+        for acc, raw, days in filings:
+            at = NOW + timedelta(days=days)
+            item = RawItem(acc, f"Schedule 13D {acc}", "b", None, at, raw)
+            ingest(conn, news_spec("sec_edgar", title_dedup=False), Batch([item]), cfg, at)
+        ids = dict(conn.execute(sa.select(items.c.source_item_id, items.c.id)).all())
+
+    def answer(item_id, _prompt):  # the model doesn't know the issuer is listed: forced for 13D
+        return {"id": item_id, "whale": True, "whale_kind": "stake", "target_listed": False,
+                "new_step": False, "stake_after_pct": 99.0}  # fmt: skip
+
+    for days in (0, 1, 2):  # annotated as they arrive, so each finds the earlier filings
+        llm = WhaleLLM(answer)
+        annotate_pending(
+            engine, llm, LLMConfig(batch_size=5), NOW + timedelta(days=days, minutes=1)
+        )
+    with engine.connect() as conn:
+        w = {k: views.news_item(conn, ids[k])["payload_json"].get("whale") for k in ids}
+    assert w["d1"]["whale"] and w["d1"]["stake_after_pct"] == 6.0  # the filed number, not 99
+    assert w["d1"]["stake_before_pct"] is None and w["d1"]["target_ticker"] == "AAPL"
+    assert w["d1"]["buyer"] == "Activist Partners LP" and w["d1"]["source"] == "13d"
+    assert (w["d2"]["stake_before_pct"], w["d2"]["stake_after_pct"]) == (6.0, 8.0)
+    assert w["d3"]["whale"] is False  # 8% → 7%: lowered, no whale
+    assert w["d4"] is None  # 4.6%: not even a candidate
+    text = format_item(views.news_item(engine.connect(), ids["d2"]))
+    assert "Доля 6% → 8%" in text and "<b>🐋 КИТ В КАПИТАЛЕ</b> · AAPL" in text

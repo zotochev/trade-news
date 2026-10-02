@@ -171,6 +171,11 @@ def create_app(deps: AdminDeps) -> FastAPI:
             options=options,
         )
 
+    @app.get("/chart/assets")
+    def chart_assets(q: str = ""):
+        with deps.engine.connect() as conn:
+            return JSONResponse(chart.search(conn, q, deps.now()))
+
     @app.get("/chart/data")
     def chart_data(symbol: str, interval: str = "1h"):
         if interval not in prices.INTERVALS:

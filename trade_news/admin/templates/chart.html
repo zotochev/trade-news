@@ -2,21 +2,35 @@
 {% block title %}График{% endblock %}
 {% block content %}
 <style>
-.chart-page { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: stretch; }
-@media (max-width: 1100px) { .chart-page { grid-template-columns: minmax(0, 1fr); } }
-#chart { width: 100%; height: calc(100vh - 250px); min-height: 420px; }
+.chart-page { display: grid; grid-template-columns: 230px minmax(0, 1fr) 360px; gap: 16px; }
+@media (max-width: 1300px) { .chart-page { grid-template-columns: 200px minmax(0, 1fr); } .feed { grid-column: 1 / -1; } }
+@media (max-width: 800px) { .chart-page { grid-template-columns: minmax(0, 1fr); } }
+.pane { height: calc(100vh - 170px); min-height: 460px; }
+.watch { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.watch .search { padding: 12px; border-bottom: 1px solid var(--line-2); }
+.watch .search input { width: 100%; }
+.wlist { overflow-y: auto; flex-grow: 1; outline: none; }
+.wrow { display: grid; grid-template-columns: 1fr auto 26px; gap: 6px; align-items: center; padding: 7px 12px; cursor: pointer; border-left: 3px solid transparent; }
+.wrow:hover { background: #faf9f6; }
+.wrow.on { background: var(--sel); border-left-color: var(--accent); }
+.wrow .sym { font-family: var(--mono); font-weight: 500; font-size: 13px; }
+.wrow .nm { display: block; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+.wrow .n { font-family: var(--mono); font-size: 12px; color: var(--muted); text-align: right; }
+.wrow .d { text-align: center; font-size: 12px; }
+.wsep { padding: 6px 12px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; background: #faf9f6; }
+.main { display: flex; flex-direction: column; gap: 10px; }
 .chart-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .chart-title { display: flex; align-items: baseline; gap: 10px; }
 .chart-title b { font-family: var(--mono); font-size: 18px; }
 .seg { display: inline-flex; border: 1px solid var(--field); border-radius: 8px; overflow: hidden; }
-.seg a { padding: 6px 12px; color: var(--ink-2); font-size: 13px; }
-.seg a.on { background: var(--accent); color: #fff; }
-.seg a:hover { text-decoration: none; }
-.legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
-.legend span b { font-weight: 600; }
-.feed { display: flex; flex-direction: column; min-height: 0; padding: 0; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: 6px 12px; background: transparent; color: var(--ink-2); font-size: 13px; min-height: 0; cursor: pointer; }
+.seg button.on { background: var(--accent); color: #fff; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); align-items: center; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+#chart { flex-grow: 1; min-height: 360px; position: relative; }
+.feed { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
 .feed .card-head { padding: 14px 16px 10px; border-bottom: 1px solid var(--line-2); }
-.feed-list { overflow-y: auto; height: calc(100vh - 250px); min-height: 420px; }
+.feed-list { overflow-y: auto; flex-grow: 1; }
 .nrow { padding: 10px 16px; border-bottom: 1px solid var(--line-2); border-left: 3px solid transparent; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
 .nrow:hover { background: #faf9f6; }
 .nrow.hl { background: var(--sel); border-left-color: var(--accent); }
@@ -25,38 +39,43 @@
 .arrow-bull { color: var(--bull); font-weight: 600; } .arrow-bear { color: var(--bear); font-weight: 600; } .arrow-neut { color: var(--muted); }
 .whale { font-size: 11px; padding: 1px 6px; border-radius: 8px; background: #efe8f6; color: #5b3a8c; font-weight: 500; }
 .msg { padding: 40px; text-align: center; color: var(--muted); }
+.tip { position: absolute; z-index: 5; pointer-events: none; display: none; max-width: 360px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.12); padding: 8px 10px; font-size: 12px; line-height: 1.4; }
+.tip .t { color: var(--muted); font-family: var(--mono); margin-bottom: 4px; }
+.tip .it { display: grid; grid-template-columns: 30px 1fr; gap: 6px; padding: 3px 0; border-top: 1px solid var(--line-2); }
+.tip .it:first-of-type { border-top: 0; }
 </style>
 
 <header class="page">
   <div>
     <h1>График</h1>
-    <p class="sub">Свечи Yahoo Finance (время UTC) и наши новости по активу. Наведите на свечу с маркером — новости подсветятся справа; на новость — её место на графике.</p>
+    <p class="sub">Свечи Yahoo Finance (UTC) и наши новости по активу. Наведите на свечу — её новости подсветятся справа; на новость — её место на графике.</p>
   </div>
-  <form method="get" action="/chart" style="display: flex; gap: 8px; align-items: flex-end;" aria-label="Выбор актива">
-    <label class="f">Актив
-      <input name="symbol" value="{{ symbol }}" list="assets" placeholder="AAPL, EURUSD, BTC" style="width: 160px; text-transform: uppercase;" autocomplete="off">
-    </label>
-    <datalist id="assets">{% for o in options %}<option value="{{ o.symbol }}">{{ o.name or o.asset_class }} · {{ o.n }} за 7 дн.</option>{% endfor %}</datalist>
-    <input type="hidden" name="interval" value="{{ interval }}">
-    <button class="primary" type="submit">Показать</button>
-  </form>
 </header>
 
 <div class="chart-page">
-  <section class="card" aria-label="Свечной график">
-    <div class="chart-bar">
-      <div class="chart-title"><b id="sym">{{ symbol }}</b><span class="small muted" id="asset-name"></span><span class="mono small" id="last"></span></div>
-      <div class="seg" role="group" aria-label="Интервал">
-        {% for iv, label in [('1h', '1 час'), ('1d', '1 день')] %}<a href="/chart?symbol={{ symbol | urlencode }}&interval={{ iv }}" class="{{ 'on' if iv == interval }}">{{ label }}</a>{% endfor %}
-      </div>
-    </div>
-    <div class="legend" aria-label="Обозначения">
-      <span><b class="arrow-bull">▲</b> рост</span><span><b class="arrow-bear">▼</b> падение</span><span><b class="arrow-neut">●</b> нейтрально</span><span>🐋 кит</span><span>размер маркера — важность 1–5</span>
-    </div>
-    <div id="chart"><div class="msg">Загрузка…</div></div>
+  <section class="card watch pane" aria-label="Активы">
+    <div class="search"><input type="search" id="q" placeholder="Тикер или название" autocomplete="off" aria-label="Поиск актива"></div>
+    <div class="wlist" id="wlist" tabindex="0" role="listbox" aria-label="Активы по числу новостей за 7 дней"></div>
   </section>
 
-  <section class="card feed" aria-labelledby="feed-h">
+  <section class="card main pane" aria-label="Свечной график">
+    <div class="chart-bar">
+      <div class="chart-title"><b id="sym"></b><span class="small muted" id="asset-name"></span><span class="mono small" id="last"></span></div>
+      <div class="seg" role="group" aria-label="Интервал">
+        <button type="button" data-iv="1h">1 час</button><button type="button" data-iv="1d">1 день</button>
+      </div>
+    </div>
+    <div class="legend" aria-label="Обозначения полосы новостей">
+      <span>Полоса новостей внизу: рост вверх, падение вниз; сегмент на новость, высота — важность, важные у нуля;</span>
+      <span><i class="sw" style="background:#1f4f9a"></i>рост</span>
+      <span><i class="sw" style="background:#c26a12"></i>падение</span>
+      <span><i class="sw" style="background:#a9a59b"></i>нейтрально</span>
+      <span><i class="sw" style="background:#6b3fa0"></i>кит</span>
+    </div>
+    <div id="chart"></div>
+  </section>
+
+  <section class="card feed pane" aria-labelledby="feed-h">
     <div class="card-head"><h2 id="feed-h">Новости на графике</h2><span class="small muted" id="feed-count"></span></div>
     <div class="feed-list" id="feed"></div>
   </section>
@@ -65,37 +84,109 @@
 <script src="/static/lightweight-charts.standalone.production.js"></script>
 <script>
 (function () {
-  var SYMBOL = {{ symbol | tojson }}, INTERVAL = {{ interval | tojson }};
-  var COLORS = { bullish: '#1f4f9a', bearish: '#c26a12', neutral: '#8a877e', whale: '#6b3fa0' };
+  var OPTIONS = {{ options | tojson }};
+  var state = { symbol: {{ symbol | tojson }}, interval: {{ interval | tojson }} };
+  var STRIP = { bullish: '#1f4f9a', bearish: '#c26a12', neutral: '#a9a59b', whale: '#6b3fa0' };
   var DIR = { bullish: ['▲', 'arrow-bull'], bearish: ['▼', 'arrow-bear'] };
   var KIND = { stake: 'доля', bid: 'оферта', bid_revision: 'торг', activist: 'активист', insider: 'инсайдер' };
   var STRENGTH = { strong: '🟩', normal: '🟨', weak: '⬜' };
-  var chartEl = document.getElementById('chart'), feedEl = document.getElementById('feed');
+  var $ = function (id) { return document.getElementById(id); };
+  var chartEl = $('chart'), feedEl = $('feed'), listEl = $('wlist'), qEl = $('q');
+  var chart = null, request = 0;
 
   function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
-  function fmt(x) { return x >= 1000 ? x.toFixed(2) : x >= 1 ? x.toFixed(2) : x.toPrecision(4); }
+  function fmt(x) { return x >= 1 ? x.toFixed(2) : x.toPrecision(4); }
+  function msg(el, text) { el.innerHTML = '<div class="msg">' + esc(text) + '</div>'; }
 
-  fetch('/chart/data?symbol=' + encodeURIComponent(SYMBOL) + '&interval=' + INTERVAL)
-    .then(function (r) { return r.json(); })
-    .then(function (data) {
-      if (data.error) { chartEl.innerHTML = '<div class="msg">' + esc(data.error) + '</div>'; return; }
-      render(data);
-    })
-    .catch(function () { chartEl.innerHTML = '<div class="msg">Не удалось загрузить данные</div>'; });
+  // --- the asset list ---------------------------------------------------------------
+  var shown = OPTIONS;
+  function lean(o) {
+    if (o.bull > o.bear) return '<span class="arrow-bull">▲</span>';
+    if (o.bear > o.bull) return '<span class="arrow-bear">▼</span>';
+    return '<span class="arrow-neut">●</span>';
+  }
+  function drawList(items, title) {
+    shown = items;
+    listEl.innerHTML = title ? '<div class="wsep">' + esc(title) + '</div>' : '';
+    if (!items.length) { listEl.innerHTML += '<div class="msg">Ничего не найдено. Enter — открыть как тикер.</div>'; return; }
+    items.forEach(function (o) {
+      var r = document.createElement('div');
+      r.className = 'wrow' + (o.symbol === state.symbol ? ' on' : '');
+      r.setAttribute('role', 'option');
+      r.dataset.symbol = o.symbol;
+      r.innerHTML = '<div><span class="sym">' + esc(o.symbol) + '</span><span class="nm">' + esc(o.name || o.asset_class) + '</span></div>' +
+        '<span class="n" title="новостей">' + o.n + '</span><span class="d">' + lean(o) + '</span>';
+      r.addEventListener('click', function () { open(o.symbol); });
+      listEl.appendChild(r);
+    });
+  }
+  function markSelected() {
+    listEl.querySelectorAll('.wrow').forEach(function (r) { r.classList.toggle('on', r.dataset.symbol === state.symbol); });
+    var on = listEl.querySelector('.wrow.on'); if (on) on.scrollIntoView({ block: 'nearest' });
+  }
+  var searchTimer;
+  qEl.addEventListener('input', function () {
+    clearTimeout(searchTimer);
+    var q = qEl.value.trim();
+    if (!q) { drawList(OPTIONS, 'За 7 дней'); return; }
+    searchTimer = setTimeout(function () {
+      fetch('/chart/assets?q=' + encodeURIComponent(q)).then(function (r) { return r.json(); })
+        .then(function (items) { if (qEl.value.trim() === q) drawList(items, 'Поиск, за 30 дней'); });
+    }, 200);
+  });
+  qEl.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); open(shown.length ? shown[0].symbol : qEl.value.trim().toUpperCase()); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); listEl.focus(); step(1); }
+  });
+  function step(d) {
+    var i = shown.findIndex(function (o) { return o.symbol === state.symbol; });
+    var next = shown[Math.max(0, Math.min(shown.length - 1, i + d))];
+    if (next) open(next.symbol);
+  }
+  listEl.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); step(1); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); step(-1); }
+  });
+
+  // --- interval ---------------------------------------------------------------------
+  document.querySelectorAll('.seg button').forEach(function (b) {
+    b.addEventListener('click', function () { state.interval = b.dataset.iv; load(); });
+  });
+
+  function open(symbol) { if (!symbol) return; state.symbol = symbol.toUpperCase(); load(); }
+
+  // --- chart ------------------------------------------------------------------------
+  function load() {
+    var id = ++request;
+    history.replaceState(null, '', '/chart?symbol=' + encodeURIComponent(state.symbol) + '&interval=' + state.interval);
+    document.querySelectorAll('.seg button').forEach(function (b) { b.classList.toggle('on', b.dataset.iv === state.interval); });
+    $('sym').textContent = state.symbol; $('asset-name').textContent = ''; $('last').innerHTML = '';
+    markSelected();
+    if (chart) { chart.remove(); chart = null; }
+    msg(chartEl, 'Загрузка…'); feedEl.innerHTML = ''; $('feed-count').textContent = '';
+    fetch('/chart/data?symbol=' + encodeURIComponent(state.symbol) + '&interval=' + state.interval)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (id !== request) return;  // a newer selection won
+        if (data.error) { msg(chartEl, data.error); return; }
+        render(data);
+      })
+      .catch(function () { if (id === request) msg(chartEl, 'Не удалось загрузить данные'); });
+  }
 
   function render(data) {
     chartEl.innerHTML = '';
-    document.getElementById('asset-name').textContent = (data.asset.name || data.asset.asset_class) + ' · ' + data.yahoo;
+    $('asset-name').textContent = (data.asset.name || data.asset.asset_class) + ' · ' + data.yahoo;
     var bars = data.bars, last = bars[bars.length - 1];
-    var first = bars.length > 1 ? bars[bars.length - 2].close : last.open, ch = (last.close / first - 1) * 100;
-    document.getElementById('last').innerHTML = fmt(last.close) + ' <span class="' + (ch >= 0 ? 'arrow-bull' : 'arrow-bear') + '">' + (ch >= 0 ? '+' : '') + ch.toFixed(2) + '%</span>';
+    var prev = bars.length > 1 ? bars[bars.length - 2].close : last.open, ch = (last.close / prev - 1) * 100;
+    $('last').innerHTML = fmt(last.close) + ' <span class="' + (ch >= 0 ? 'arrow-bull' : 'arrow-bear') + '">' + (ch >= 0 ? '+' : '') + ch.toFixed(2) + '%</span>';
 
-    var chart = LightweightCharts.createChart(chartEl, {
+    chart = LightweightCharts.createChart(chartEl, {
       autoSize: true,
       layout: { background: { color: '#ffffff' }, textColor: '#5d5a52', fontFamily: 'IBM Plex Sans, sans-serif' },
       grid: { vertLines: { color: '#f3f1ec' }, horzLines: { color: '#f3f1ec' } },
-      rightPriceScale: { borderColor: '#e2dfd6' },
-      timeScale: { borderColor: '#e2dfd6', timeVisible: INTERVAL === '1h', secondsVisible: false },
+      rightPriceScale: { borderColor: '#e2dfd6', scaleMargins: { top: 0.06, bottom: 0.25 } },
+      timeScale: { borderColor: '#e2dfd6', timeVisible: state.interval === '1h', secondsVisible: false },
       crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
     });
     var series = chart.addCandlestickSeries({
@@ -104,26 +195,67 @@
     series.setData(bars);
     var closeAt = {}; bars.forEach(function (b) { closeAt[b.time] = b.close; });
 
+    // the news strip: under the candles on its own scale, one stacked column per candle,
+    // a segment per news (height = importance), the most important at the bottom
     var news = data.news, byBar = {};
     news.forEach(function (n) { (byBar[n.bar_time] = byBar[n.bar_time] || []).push(n); });
-    series.setMarkers(news.map(function (n) {
-      var dir = n.direction || 'neutral';
-      return {
-        time: n.bar_time,
-        position: dir === 'bearish' ? 'aboveBar' : 'belowBar',
-        shape: n.whale ? 'circle' : dir === 'bullish' ? 'arrowUp' : dir === 'bearish' ? 'arrowDown' : 'circle',
-        color: n.whale ? COLORS.whale : COLORS[dir],
-        size: 0.5 + 0.25 * (n.importance || 1),
-        text: n.whale ? '🐋' : '',
-      };
-    }));
+    var times = Object.keys(byBar).map(Number).sort(function (a, b) { return a - b; });
+    times.forEach(function (t) {
+      byBar[t].sort(function (a, b) { return (b.importance || 0) - (a.importance || 0) || (b.whale ? 1 : 0) - (a.whale ? 1 : 0); });
+    });
+    function colorOf(n) { return n.whale ? STRIP.whale : STRIP[n.direction] || STRIP.neutral; }
+    // two-sided: rising news (then neutral) stack up from zero, falling news stack down;
+    // on each side the most important segment touches the zero line
+    function side(n) { return n.direction === 'bearish' ? -1 : 1; }
+    function sorted(ns) {
+      return ns.slice().sort(function (a, b) {
+        var na = a.direction === 'neutral' || !a.direction ? 1 : 0, nb = b.direction === 'neutral' || !b.direction ? 1 : 0;
+        return na - nb || (b.importance || 0) - (a.importance || 0);
+      });
+    }
+    [1, -1].forEach(function (sign) {
+      var stacks = {};
+      times.forEach(function (t) {
+        var ns = sorted(byBar[t].filter(function (n) { return side(n) === sign; }));
+        if (ns.length) stacks[t] = ns;
+      });
+      var ts = Object.keys(stacks).map(Number).sort(function (a, b) { return a - b; });
+      var depth = Math.min(6, Math.max.apply(null, [0].concat(ts.map(function (t) { return stacks[t].length; }))));
+      // a series per stack position, the tallest first so the lower segments cover it; only
+      // the 6 most important per side are drawn (a busy candle would flatten all the others),
+      // the rest are in the tooltip and the list
+      for (var p = depth - 1; p >= 0; p--) {
+        var s = chart.addHistogramSeries({ priceScaleId: 'news', lastValueVisible: false, priceLineVisible: false, base: 0 });
+        s.setData(ts.filter(function (t) { return stacks[t].length > p; }).map(function (t) {
+          var ns = stacks[t], sum = 0;
+          for (var i = 0; i <= p; i++) sum += ns[i].importance || 1;
+          return { time: t, value: sign * sum, color: colorOf(ns[p]) };
+        }));
+      }
+    });
+    chart.priceScale('news').applyOptions({ scaleMargins: { top: 0.78, bottom: 0.02 }, visible: false });
+
+    var tip = document.createElement('div'); tip.className = 'tip'; chartEl.appendChild(tip);
+    function showTip(param) {
+      var ns = param.time && byBar[param.time];
+      if (!ns || !param.point) { tip.style.display = 'none'; return; }
+      tip.innerHTML = '<div class="t">' + esc(ns[0].published.slice(0, 5)) + ' · ' + ns.length + ' ' + (ns.length === 1 ? 'новость' : 'новостей') + '</div>' +
+        ns.slice(0, 8).map(function (n) {
+          var d = DIR[n.direction] || ['●', 'arrow-neut'];
+          return '<div class="it"><span class="' + d[1] + '">' + d[0] + (n.importance || '') + '</span><span>' + (n.whale ? '🐋 ' : '') + esc(n.summary) + '</span></div>';
+        }).join('') + (ns.length > 8 ? '<div class="t">… ещё ' + (ns.length - 8) + '</div>' : '');
+      tip.style.display = 'block';
+      var w = chartEl.clientWidth, x = param.point.x + 16, y = Math.max(8, param.point.y - tip.offsetHeight - 12);
+      if (x + tip.offsetWidth > w - 60) x = param.point.x - tip.offsetWidth - 16;
+      tip.style.left = Math.max(4, x) + 'px'; tip.style.top = y + 'px';
+    }
 
     var rows = {};
-    function row(n) {
+    news.forEach(function (n) {
       var d = DIR[n.direction] || ['●', 'arrow-neut'];
       var w = n.whale ? '<span class="whale">' + (STRENGTH[n.whale.strength] || '') + ' 🐋 ' + esc(KIND[n.whale.kind] || n.whale.kind) + '</span>' : '';
       var el = document.createElement('div');
-      el.className = 'nrow'; el.dataset.bar = n.bar_time;
+      el.className = 'nrow';
       el.innerHTML = '<div class="meta"><span class="mono">' + esc(n.published) + '</span><span class="' + d[1] + '">' + d[0] + ' ' + (n.importance || '') + '</span>' + w + '<span>' + esc(n.source) + '</span></div>' +
         '<div class="sum">' + esc(n.summary) + '</div>';
       el.title = n.title;
@@ -131,22 +263,24 @@
       el.addEventListener('mouseleave', function () { chart.clearCrosshairPosition(); });
       el.addEventListener('click', function () { window.open('/news?id=' + n.id, '_blank'); });
       rows[n.id] = el;
-      return el;
-    }
-    news.forEach(row);
+    });
 
     function showRange(range) {
       if (!range) return;
-      var visible = news.filter(function (n) { return n.bar_time >= range.from && n.bar_time <= range.to; });
+      var visible = [];
+      times.slice().reverse().forEach(function (t) {
+        if (t >= range.from && t <= range.to) visible = visible.concat(byBar[t]);
+      });
       feedEl.innerHTML = '';
-      if (!visible.length) { feedEl.innerHTML = '<div class="msg">В видимом диапазоне новостей нет</div>'; }
-      visible.slice().reverse().forEach(function (n) { feedEl.appendChild(rows[n.id]); });
-      document.getElementById('feed-count').textContent = visible.length + ' из ' + news.length;
+      if (!visible.length) msg(feedEl, 'В видимом диапазоне новостей нет');
+      visible.forEach(function (n) { feedEl.appendChild(rows[n.id]); });
+      $('feed-count').textContent = visible.length + ' из ' + news.length;
     }
     chart.timeScale().subscribeVisibleTimeRangeChange(showRange);
 
     var lit = [];
     chart.subscribeCrosshairMove(function (param) {
+      showTip(param);
       var ids = param.time && byBar[param.time] ? byBar[param.time].map(function (n) { return n.id; }) : [];
       if (ids.join() === lit.join()) return;
       lit.forEach(function (id) { rows[id].classList.remove('hl'); });
@@ -155,9 +289,12 @@
       if (ids.length && param.sourceEvent !== undefined) rows[ids[0]].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     });
 
-    var show = INTERVAL === '1h' ? 160 : 130;
+    var show = state.interval === '1h' ? 160 : 130;
     chart.timeScale().setVisibleLogicalRange({ from: bars.length - show, to: bars.length + 3 });
   }
+
+  drawList(OPTIONS, 'За 7 дней');
+  load();
 })();
 </script>
 {% endblock %}

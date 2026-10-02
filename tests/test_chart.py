@@ -69,7 +69,7 @@ def test_snap_news_to_the_bar_it_falls_in():
 
 def test_chart_page_and_data(admin):  # noqa: F811
     page = admin.get("/chart?symbol=aapl&interval=1d")
-    assert page.status_code == 200 and '<b id="sym">AAPL</b>' in page.text
+    assert page.status_code == 200 and 'state = { symbol: "AAPL", interval: "1d" }' in page.text
     assert "lightweight-charts.standalone.production.js" in page.text
     assert admin.get("/static/lightweight-charts.standalone.production.js").status_code == 200
     data = admin.get("/chart/data?symbol=AAPL&interval=1h").json()
@@ -81,3 +81,11 @@ def test_chart_page_and_data(admin):  # noqa: F811
     assert admin.calls["prices"] == [("AAPL", "1h")]  # second request served from memory
     assert admin.get("/chart/data?symbol=NOPE").status_code == 404
     assert admin.get("/chart/data?symbol=AAPL&interval=5m").status_code == 400
+
+
+def test_asset_list_and_search(admin):  # noqa: F811
+    page = admin.get("/chart").text
+    assert '"symbol": "AAPL"' in page and '"bull": 1' in page  # the list: AAPL with a ▲ news
+    assert [a["symbol"] for a in admin.get("/chart/assets?q=app").json()] == ["AAPL"]
+    assert [a["symbol"] for a in admin.get("/chart/assets?q=apple").json()] == ["AAPL"]  # name
+    assert admin.get("/chart/assets?q=").json() == []

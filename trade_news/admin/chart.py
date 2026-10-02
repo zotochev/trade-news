@@ -26,23 +26,49 @@ def find_asset(conn, symbol: str) -> dict | None:
     return dict(row._mapping) if row else None
 
 
-def suggestions(conn, now: datetime, limit: int = 60) -> list[dict]:
-    """Assets most written about in the last 7 days that we can chart."""
+def _mention_query(since: datetime):
+    """Assets linked from news since `since`: item count and bullish / bearish links."""
     mentions = sa.func.count(sa.distinct(item_assets.c.item_id))
-    rows = conn.execute(
-        sa.select(assets.c.asset_class, assets.c.symbol, assets.c.name, mentions.label("n"))
+    bull = sa.func.sum(sa.case((item_assets.c.direction == "bullish", 1), else_=0))
+    bear = sa.func.sum(sa.case((item_assets.c.direction == "bearish", 1), else_=0))
+    return (
+        sa.select(
+            assets.c.asset_class, assets.c.symbol, assets.c.name, mentions.label("n"),
+            bull.label("bull"), bear.label("bear"),
+        )
         .join(item_assets, item_assets.c.asset_id == assets.c.id)
         .join(items, items.c.id == item_assets.c.item_id)
         .where(
-            items.c.published_at >= now - timedelta(days=7),
+            items.c.published_at >= since,
             item_assets.c.annotation_id.in_(views.latest_annotation_ids()),
         )
         .group_by(assets.c.id)
-        .order_by(mentions.desc())
-        .limit(limit * 2)
-    )
+        .order_by(mentions.desc(), assets.c.symbol)
+    )  # fmt: skip
+
+
+def _chartable(rows, limit: int) -> list[dict]:
     out = [dict(r._mapping) for r in rows if prices.yahoo_symbol(r.asset_class, r.symbol)]
     return out[:limit]
+
+
+def suggestions(conn, now: datetime, limit: int = 60) -> list[dict]:
+    """Assets most written about in the last 7 days that we can chart."""
+    return _chartable(conn.execute(_mention_query(now - timedelta(days=7)).limit(limit * 2)), limit)
+
+
+def search(conn, q: str, now: datetime, limit: int = 15) -> list[dict]:
+    """Chartable assets with news in the last 30 days whose symbol starts with / name contains
+    `q`, most written about first."""
+    q = q.strip()
+    if not q:
+        return []
+    cond = sa.or_(
+        sa.func.upper(assets.c.symbol).like(f"{q.upper()}%"),
+        sa.func.lower(assets.c.name).like(f"%{q.lower()}%"),
+    )
+    query = _mention_query(now - timedelta(days=30)).where(cond).limit(limit * 2)
+    return _chartable(conn.execute(query), limit)
 
 
 def _ts(dt: datetime) -> int:

@@ -98,6 +98,7 @@ aside.card { width: 380px; flex-shrink: 0; position: sticky; top: 16px; }
   <div class="brand"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7fc8c3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l5-6 4 4 8-10"></path><path d="M14 5h6v6"></path></svg>trade-news</div>
   <a href="/" class="{{ 'on' if active == 'overview' }}">Обзор</a>
   <a href="/market" class="{{ 'on' if active == 'market' }}">Рынок</a>
+  <a href="/chart" class="{{ 'on' if active == 'chart' }}">График</a>
   <a href="/news" class="{{ 'on' if active == 'news' }}">Лента</a>
   <a href="/llm" class="{{ 'on' if active == 'llm' }}">LLM и расход</a>
   <a href="/assets" class="{{ 'on' if active == 'assets' }}">Нераспознанные активы{% if queue_size %}<span class="badge">{{ queue_size }}</span>{% endif %}</a>

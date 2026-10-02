@@ -16,20 +16,23 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
+import httpx
 import sqlalchemy as sa
 import structlog
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 
-from trade_news import delivery, sectors, views
-from trade_news.admin import data, market
+from trade_news import delivery, prices, sectors, views
+from trade_news.admin import chart, data, market
 from trade_news.api import create_api
 from trade_news.config import Config
 
 log = structlog.get_logger()
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).with_name("templates")))
+STATIC_DIR = str(Path(__file__).with_name("static"))
 ASSET_CLASSES = ("equity", "fx", "crypto", "commodity", "index", "rates", "macro")
 
 
@@ -43,6 +46,8 @@ class AdminDeps:
     reannotate: Callable[[int], None] | None = None  # annotate one item right away
     bot_running: Callable[[], bool] | None = None
     delivery_configured: bool = False  # bot token and owner chat id are set
+    # (yahoo symbol, interval) -> bars; None: Yahoo over HTTP (tests pass a stub)
+    price_fetch: Callable[[str, str], list] | None = None
 
 
 # --- template helpers ---------------------------------------------------------------
@@ -88,6 +93,12 @@ TEMPLATES.env.globals.update(SECTORS=sectors.SECTORS, sector_name=sectors.name_r
 def create_app(deps: AdminDeps) -> FastAPI:
     app = FastAPI(title="trade-news admin", docs_url=None, redoc_url=None, openapi_url=None)
     app.mount("/api", create_api(deps.engine))  # read-only API, own basic auth in nginx
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    if deps.price_fetch is None:
+        http = httpx.Client(timeout=30)
+        price_fetch = lambda yahoo, interval: prices.fetch_bars(http, yahoo, interval)  # noqa: E731
+    else:
+        price_fetch = deps.price_fetch
 
     @app.middleware("http")
     async def same_origin_posts(request: Request, call_next):
@@ -145,6 +156,28 @@ def create_app(deps: AdminDeps) -> FastAPI:
             sector=p.get("sector", "") if sectors.expand(p.get("sector", "")) else "",
             review_only=p.get("review") == "1",
         )
+
+    @app.get("/chart", response_class=HTMLResponse)
+    def chart_page(request: Request, symbol: str = "", interval: str = "1h"):
+        with deps.engine.connect() as conn:
+            options = chart.suggestions(conn, deps.now())
+        symbol = symbol.strip().upper() or (options[0]["symbol"] if options else "SPX")
+        return render(
+            request,
+            "chart.html",
+            "chart",
+            symbol=symbol,
+            interval=interval if interval in prices.INTERVALS else "1h",
+            options=options,
+        )
+
+    @app.get("/chart/data")
+    def chart_data(symbol: str, interval: str = "1h"):
+        if interval not in prices.INTERVALS:
+            return JSONResponse({"error": "interval: 1h | 1d"}, status_code=400)
+        with deps.engine.connect() as conn:
+            data = chart.chart_data(conn, symbol, interval, deps.now(), price_fetch)
+        return JSONResponse(data, status_code=404 if "error" in data else 200)
 
     @app.get("/market", response_class=HTMLResponse)
     def market_page(request: Request):

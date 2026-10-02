@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}График{% endblock %}
+{% block content %}
+<style>
+.chart-page { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: stretch; }
+@media (max-width: 1100px) { .chart-page { grid-template-columns: minmax(0, 1fr); } }
+#chart { width: 100%; height: calc(100vh - 250px); min-height: 420px; }
+.chart-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.chart-title { display: flex; align-items: baseline; gap: 10px; }
+.chart-title b { font-family: var(--mono); font-size: 18px; }
+.seg { display: inline-flex; border: 1px solid var(--field); border-radius: 8px; overflow: hidden; }
+.seg a { padding: 6px 12px; color: var(--ink-2); font-size: 13px; }
+.seg a.on { background: var(--accent); color: #fff; }
+.seg a:hover { text-decoration: none; }
+.legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.legend span b { font-weight: 600; }
+.feed { display: flex; flex-direction: column; min-height: 0; padding: 0; overflow: hidden; }
+.feed .card-head { padding: 14px 16px 10px; border-bottom: 1px solid var(--line-2); }
+.feed-list { overflow-y: auto; height: calc(100vh - 250px); min-height: 420px; }
+.nrow { padding: 10px 16px; border-bottom: 1px solid var(--line-2); border-left: 3px solid transparent; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+.nrow:hover { background: #faf9f6; }
+.nrow.hl { background: var(--sel); border-left-color: var(--accent); }
+.nrow .meta { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); }
+.nrow .sum { font-size: 13px; line-height: 1.4; }
+.arrow-bull { color: var(--bull); font-weight: 600; } .arrow-bear { color: var(--bear); font-weight: 600; } .arrow-neut { color: var(--muted); }
+.whale { font-size: 11px; padding: 1px 6px; border-radius: 8px; background: #efe8f6; color: #5b3a8c; font-weight: 500; }
+.msg { padding: 40px; text-align: center; color: var(--muted); }
+</style>
+
+<header class="page">
+  <div>
+    <h1>График</h1>
+    <p class="sub">Свечи Yahoo Finance (время UTC) и наши новости по активу. Наведите на свечу с маркером — новости подсветятся справа; на новость — её место на графике.</p>
+  </div>
+  <form method="get" action="/chart" style="display: flex; gap: 8px; align-items: flex-end;" aria-label="Выбор актива">
+    <label class="f">Актив
+      <input name="symbol" value="{{ symbol }}" list="assets" placeholder="AAPL, EURUSD, BTC" style="width: 160px; text-transform: uppercase;" autocomplete="off">
+    </label>
+    <datalist id="assets">{% for o in options %}<option value="{{ o.symbol }}">{{ o.name or o.asset_class }} · {{ o.n }} за 7 дн.</option>{% endfor %}</datalist>
+    <input type="hidden" name="interval" value="{{ interval }}">
+    <button class="primary" type="submit">Показать</button>
+  </form>
+</header>
+
+<div class="chart-page">
+  <section class="card" aria-label="Свечной график">
+    <div class="chart-bar">
+      <div class="chart-title"><b id="sym">{{ symbol }}</b><span class="small muted" id="asset-name"></span><span class="mono small" id="last"></span></div>
+      <div class="seg" role="group" aria-label="Интервал">
+        {% for iv, label in [('1h', '1 час'), ('1d', '1 день')] %}<a href="/chart?symbol={{ symbol | urlencode }}&interval={{ iv }}" class="{{ 'on' if iv == interval }}">{{ label }}</a>{% endfor %}
+      </div>
+    </div>
+    <div class="legend" aria-label="Обозначения">
+      <span><b class="arrow-bull">▲</b> рост</span><span><b class="arrow-bear">▼</b> падение</span><span><b class="arrow-neut">●</b> нейтрально</span><span>🐋 кит</span><span>размер маркера — важность 1–5</span>
+    </div>
+    <div id="chart"><div class="msg">Загрузка…</div></div>
+  </section>
+
+  <section class="card feed" aria-labelledby="feed-h">
+    <div class="card-head"><h2 id="feed-h">Новости на графике</h2><span class="small muted" id="feed-count"></span></div>
+    <div class="feed-list" id="feed"></div>
+  </section>
+</div>
+
+<script src="/static/lightweight-charts.standalone.production.js"></script>
+<script>
+(function () {
+  var SYMBOL = {{ symbol | tojson }}, INTERVAL = {{ interval | tojson }};
+  var COLORS = { bullish: '#1f4f9a', bearish: '#c26a12', neutral: '#8a877e', whale: '#6b3fa0' };
+  var DIR = { bullish: ['▲', 'arrow-bull'], bearish: ['▼', 'arrow-bear'] };
+  var KIND = { stake: 'доля', bid: 'оферта', bid_revision: 'торг', activist: 'активист', insider: 'инсайдер' };
+  var STRENGTH = { strong: '🟩', normal: '🟨', weak: '⬜' };
+  var chartEl = document.getElementById('chart'), feedEl = document.getElementById('feed');
+
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+  function fmt(x) { return x >= 1000 ? x.toFixed(2) : x >= 1 ? x.toFixed(2) : x.toPrecision(4); }
+
+  fetch('/chart/data?symbol=' + encodeURIComponent(SYMBOL) + '&interval=' + INTERVAL)
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) { chartEl.innerHTML = '<div class="msg">' + esc(data.error) + '</div>'; return; }
+      render(data);
+    })
+    .catch(function () { chartEl.innerHTML = '<div class="msg">Не удалось загрузить данные</div>'; });
+
+  function render(data) {
+    chartEl.innerHTML = '';
+    document.getElementById('asset-name').textContent = (data.asset.name || data.asset.asset_class) + ' · ' + data.yahoo;
+    var bars = data.bars, last = bars[bars.length - 1];
+    var first = bars.length > 1 ? bars[bars.length - 2].close : last.open, ch = (last.close / first - 1) * 100;
+    document.getElementById('last').innerHTML = fmt(last.close) + ' <span class="' + (ch >= 0 ? 'arrow-bull' : 'arrow-bear') + '">' + (ch >= 0 ? '+' : '') + ch.toFixed(2) + '%</span>';
+
+    var chart = LightweightCharts.createChart(chartEl, {
+      autoSize: true,
+      layout: { background: { color: '#ffffff' }, textColor: '#5d5a52', fontFamily: 'IBM Plex Sans, sans-serif' },
+      grid: { vertLines: { color: '#f3f1ec' }, horzLines: { color: '#f3f1ec' } },
+      rightPriceScale: { borderColor: '#e2dfd6' },
+      timeScale: { borderColor: '#e2dfd6', timeVisible: INTERVAL === '1h', secondsVisible: false },
+      crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    });
+    var series = chart.addCandlestickSeries({
+      upColor: '#5b9c88', downColor: '#c97a7a', borderVisible: false, wickUpColor: '#5b9c88', wickDownColor: '#c97a7a',
+    });
+    series.setData(bars);
+    var closeAt = {}; bars.forEach(function (b) { closeAt[b.time] = b.close; });
+
+    var news = data.news, byBar = {};
+    news.forEach(function (n) { (byBar[n.bar_time] = byBar[n.bar_time] || []).push(n); });
+    series.setMarkers(news.map(function (n) {
+      var dir = n.direction || 'neutral';
+      return {
+        time: n.bar_time,
+        position: dir === 'bearish' ? 'aboveBar' : 'belowBar',
+        shape: n.whale ? 'circle' : dir === 'bullish' ? 'arrowUp' : dir === 'bearish' ? 'arrowDown' : 'circle',
+        color: n.whale ? COLORS.whale : COLORS[dir],
+        size: 0.5 + 0.25 * (n.importance || 1),
+        text: n.whale ? '🐋' : '',
+      };
+    }));
+
+    var rows = {};
+    function row(n) {
+      var d = DIR[n.direction] || ['●', 'arrow-neut'];
+      var w = n.whale ? '<span class="whale">' + (STRENGTH[n.whale.strength] || '') + ' 🐋 ' + esc(KIND[n.whale.kind] || n.whale.kind) + '</span>' : '';
+      var el = document.createElement('div');
+      el.className = 'nrow'; el.dataset.bar = n.bar_time;
+      el.innerHTML = '<div class="meta"><span class="mono">' + esc(n.published) + '</span><span class="' + d[1] + '">' + d[0] + ' ' + (n.importance || '') + '</span>' + w + '<span>' + esc(n.source) + '</span></div>' +
+        '<div class="sum">' + esc(n.summary) + '</div>';
+      el.title = n.title;
+      el.addEventListener('mouseenter', function () { chart.setCrosshairPosition(closeAt[n.bar_time], n.bar_time, series); });
+      el.addEventListener('mouseleave', function () { chart.clearCrosshairPosition(); });
+      el.addEventListener('click', function () { window.open('/news?id=' + n.id, '_blank'); });
+      rows[n.id] = el;
+      return el;
+    }
+    news.forEach(row);
+
+    function showRange(range) {
+      if (!range) return;
+      var visible = news.filter(function (n) { return n.bar_time >= range.from && n.bar_time <= range.to; });
+      feedEl.innerHTML = '';
+      if (!visible.length) { feedEl.innerHTML = '<div class="msg">В видимом диапазоне новостей нет</div>'; }
+      visible.slice().reverse().forEach(function (n) { feedEl.appendChild(rows[n.id]); });
+      document.getElementById('feed-count').textContent = visible.length + ' из ' + news.length;
+    }
+    chart.timeScale().subscribeVisibleTimeRangeChange(showRange);
+
+    var lit = [];
+    chart.subscribeCrosshairMove(function (param) {
+      var ids = param.time && byBar[param.time] ? byBar[param.time].map(function (n) { return n.id; }) : [];
+      if (ids.join() === lit.join()) return;
+      lit.forEach(function (id) { rows[id].classList.remove('hl'); });
+      lit = ids;
+      ids.forEach(function (id) { rows[id].classList.add('hl'); });
+      if (ids.length && param.sourceEvent !== undefined) rows[ids[0]].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+
+    var show = INTERVAL === '1h' ? 160 : 130;
+    chart.timeScale().setVisibleLogicalRange({ from: bars.length - show, to: bars.length + 3 });
+  }
+})();
+</script>
+{% endblock %}

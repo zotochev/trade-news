@@ -26,6 +26,14 @@ from trade_news.db.schema import (
 from trade_news.pipeline import ingest
 
 
+def fake_bars(start, n, step=timedelta(hours=1)):
+    return [
+        {"ts": start + i * step, "open": 100.0 + i, "high": 102.0 + i, "low": 99.0 + i,
+         "close": 101.0 + i, "volume": 1000.0}
+        for i in range(n)
+    ]  # fmt: skip
+
+
 @pytest.fixture
 def admin(engine, cfg):
     with engine.begin() as conn:
@@ -90,7 +98,11 @@ def admin(engine, cfg):
         annotate_now=lambda: calls.__setitem__("annotate", calls["annotate"] + 1),
         reannotate=lambda i: calls["reannotate"].append(i),
         bot_running=lambda: True,
+        price_fetch=lambda yahoo, interval: (
+            calls["prices"].append((yahoo, interval)) or fake_bars(NOW - timedelta(hours=6), 12)
+        ),
     )
+    calls["prices"] = []
     client = TestClient(create_app(deps))
     client.calls = calls
     return client

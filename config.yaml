@@ -19,7 +19,7 @@ sectors:                 # equity sector/industry from SEC SIC codes, for stocks
   batch: 100             # SEC requests per run (shares rate_limits.sec with sec_edgar)
 
 background_digest:       # "Фон рынка": news below the delivery thresholds, by industry
-  enabled: true
+  enabled: false         # off 2026-10-07 (not useful enough); true + restart to bring back
   hours_utc: [13, 17, 21]  # before the US open, mid-session, after the close
   min_importance: 2        # importance 1 is noise (routine filings)
   max_assets_per_sector: 5

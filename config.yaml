@@ -73,6 +73,17 @@ sources:
 
   # CoinDesk RSS, no key, ~25 newest articles. Entries older than max_age_hours are stored
   # but never annotated (the feed returns days of history); 6 h = llm.max_item_age_hours.
+  # Vesting schedules from DefiLlama (no key). Project files are up to ~17 MB and parsed as a
+  # stream; per_run of them each run, so the whole list (~370) is refreshed every ~2.5 days.
+  token_unlocks:
+    interval_seconds: 1800
+    params:
+      per_run: 3
+      min_pct: 1.0             # one-off release >= 1% of the supply unlocked so far
+      min_usd: 5000000         # ... and >= $5M at the current price
+      lead_days: 3             # news item this far ahead of the release
+      horizon_days: 365        # releases kept in the table / cursor
+
   coindesk:
     interval_seconds: 300
     params: {max_age_hours: 6}

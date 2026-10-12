@@ -26,6 +26,7 @@ from trade_news.db.schema import (
     macro_observations,
     rate_expectations,
     raw_items,
+    token_unlocks,
 )
 
 SIGN = {"bullish": 1, "bearish": -1}
@@ -341,6 +342,18 @@ def _calendar(conn, now: datetime, days: int = 7, limit: int = 12) -> list[dict]
         sa.select(econ_events)
         .where(econ_events.c.id.in_(latest), econ_events.c.importance >= 3)
         .order_by(econ_events.c.scheduled_at)
+        .limit(limit)
+    ).mappings()
+    return [dict(r) for r in rows]
+
+
+def unlocks(conn, now: datetime, days: int = 30, limit: int = 12) -> list[dict]:
+    """Large token unlocks ahead (collector token_unlocks)."""
+    at = token_unlocks.c.unlock_at
+    rows = conn.execute(
+        sa.select(token_unlocks)
+        .where(at >= now, at < now + timedelta(days=days))
+        .order_by(at)
         .limit(limit)
     ).mappings()
     return [dict(r) for r in rows]

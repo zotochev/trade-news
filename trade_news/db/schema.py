@@ -342,6 +342,22 @@ macro_observations = sa.Table(
     sa.PrimaryKeyConstraint("series_id", "obs_date"),
 )
 
+# Vesting releases of crypto tokens (collector token_unlocks): the first sighting is kept
+token_unlocks = sa.Table(
+    "token_unlocks",
+    metadata,
+    sa.Column("protocol", sa.Text, nullable=False),  # DefiLlama slug
+    sa.Column("unlock_at", UTCDateTime, nullable=False),
+    sa.Column("name", sa.Text, nullable=False),
+    sa.Column("coin", sa.Text, nullable=False),  # coingecko:<id> or <chain>:<address>
+    sa.Column("tokens", sa.Float, nullable=False),
+    sa.Column("pct_unlocked", sa.Float, nullable=False),  # of the supply unlocked at fetch time
+    sa.Column("recipients", sa.Text),
+    sa.Column("fetched_at", UTCDateTime, nullable=False),
+    sa.PrimaryKeyConstraint("protocol", "unlock_at"),
+    sa.Index(None, "unlock_at"),
+)
+
 prices = sa.Table(
     "prices",
     metadata,

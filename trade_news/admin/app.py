@@ -192,6 +192,7 @@ def create_app(deps: AdminDeps) -> FastAPI:
             macro = market.macro(conn, now)
             leader_groups = market.attention_groups(conn, now)
             insiders = market.insiders(conn, now)
+            unlocks = market.unlocks(conn, now)
         return render(
             request,
             "market.html",
@@ -202,6 +203,7 @@ def create_app(deps: AdminDeps) -> FastAPI:
             macro=macro,
             chart=market.yield_chart(macro.yields),
             insiders=insiders,
+            unlocks=unlocks,
         )
 
     @app.get("/news", response_class=HTMLResponse)

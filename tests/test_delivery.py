@@ -291,6 +291,24 @@ def test_format_calendar_release():
     )
 
 
+def test_format_token_unlock():
+    item = {
+        "source": "token_unlocks",
+        "payload_json": {"summary": "Разблокировка ARB на $18M", "event_type": "other"},
+        "raw_json": {
+            "tokens": 92645833.3, "symbol": "ARB", "amount_usd": 18_000_000, "pct": 1.32,
+            "recipients": ["Team", "Investors"],
+        },
+        "links": [link(symbol="ARB", asset_class="crypto", importance=3, direction="bearish")],
+        "relevance": None,
+        "raw_url": "https://defillama.com/unlocks/arbitrum",
+    }  # fmt: skip
+    text = format_item(item)
+    assert text.startswith("🔓 Разблокировка токенов · <b>ARB ▼</b>")
+    assert "92 645 833 ARB ≈ $18.0M · 1.3% от разблокированного · кому: Team, Investors" in text
+    assert passes(DeliveryRules(min_importance=5), item["links"], "other", "token_unlocks")
+
+
 def test_format_fedwatch_and_scheduled_when():
     item = {
         "source": "cme_fedwatch",

@@ -54,6 +54,7 @@ SOURCE_RU = {
     "cme_fedwatch": "CME FedWatch",
     "fred": "FRED",
     "ff_calendar": "Календарь + FRED",
+    "token_unlocks": "DefiLlama",
     **CENTRAL_BANKS,
 }
 MAX_LEN = 4096  # Telegram message limit
@@ -95,6 +96,8 @@ def _kind(source: str, event_type: str | None, raw: dict) -> tuple[str, str]:
         return ("📉" if (raw.get("change_bp") or 0) < 0 else "📈"), "Доходности"
     if source == "sec_edgar" and raw.get("form4"):
         return "💼", "Инсайдер"
+    if source == "token_unlocks":
+        return "🔓", "Разблокировка токенов"
     if source in CENTRAL_BANKS:
         emoji, kind = EVENT_KIND.get(event_type, ("🏦", ""))
         return emoji, f"{CENTRAL_BANKS[source]}{': ' + kind.lower() if kind else ''}"
@@ -148,6 +151,12 @@ def _facts(source: str, raw: dict) -> str | None:
         )
         who = ", ".join(f4.get("roles") or []) + " " + ", ".join(f4.get("owners") or [])
         return " · ".join(p for p in (why, who.strip()) if p) or None
+    if source == "token_unlocks" and raw.get("amount_usd"):
+        tokens = f"{raw['tokens']:,.0f}".replace(",", " ")
+        return (
+            f"{tokens} {raw.get('symbol') or ''} ≈ {_usd(raw['amount_usd'])} · "
+            f"{raw['pct']:.1f}% от разблокированного · кому: {', '.join(raw['recipients'])}"
+        )
     return None
 
 

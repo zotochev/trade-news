@@ -23,6 +23,7 @@ from trade_news.db.schema import (
     macro_observations,
     rate_expectations,
     raw_items,
+    token_unlocks,
 )
 from trade_news.dedup import content_hash, find_duplicate, normalize_title, normalize_url, sha256
 from trade_news.http import RateLimiter, make_getter
@@ -38,6 +39,7 @@ ROW_TABLES = {
     ),
     "macro_observations": (macro_observations, ("series_id", "obs_date")),
     "econ_events": (econ_events, ()),
+    "token_unlocks": (token_unlocks, ("protocol", "unlock_at")),
 }
 
 # SQLite has a single writer anyway, and dedup must see items written by other sources.

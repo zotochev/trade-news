@@ -48,6 +48,7 @@ sources:
         min_buy_usd: 100000            # open-market purchase (code P)
         min_sell_usd: 1000000          # open-market sale (code S)
         skip_planned_sales: true       # sales under a Rule 10b5-1 plan carry no signal
+        cfo_only: true                 # of insiders only the CFO's trades (best copy returns)
 
   finnhub_market_news:
     interval_seconds: 300

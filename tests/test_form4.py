@@ -1,3 +1,4 @@
+import dataclasses
 from types import SimpleNamespace
 
 import pytest
@@ -56,6 +57,31 @@ def test_noise_has_no_open_market_trades():
 def test_significance(name, th, ok, why):
     significant, reason = form4.significance(load(name), th)
     assert significant is ok and reason.startswith(why)
+
+
+@pytest.mark.parametrize(
+    "title, cfo",
+    [
+        ("Chief Financial Officer", True),
+        ("EVP & CFO", True),
+        ("Interim CEO and CFO", True),
+        ("PFO & Treasurer", True),
+        ("Principal Financial Officer", True),
+        ("Chief Accounting Officer", False),
+        ("Treasurer", False),
+        ("President & CEO", False),
+    ],
+)
+def test_cfo_role(title, cfo):
+    assert form4.Form4(None, None, None, [], [title], None).is_cfo is cfo
+
+
+def test_cfo_only_drops_other_insiders():
+    th = form4.Thresholds(min_sell_usd=10_000, cfo_only=True)
+    ceo = load("form4_sale")
+    assert form4.significance(ceo, th) == (False, "not a CFO")
+    cfo = dataclasses.replace(ceo, roles=["EVP, CFO"])
+    assert form4.significance(cfo, th)[0] is True
 
 
 def test_parse_rejects_non_ownership_documents():

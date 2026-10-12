@@ -18,6 +18,8 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 
 _XML_RE = re.compile(r"<XML>\s*(.*?)\s*</XML>", re.S | re.I)
+# "CFO", "EVP & Chief Financial Officer", "PFO & Treasurer"; not the accounting officer (CAO)
+_CFO_RE = re.compile(r"\b(CFO|PFO|(chief|principal) financial officer)\b", re.I)
 CODE_NAMES = {"P": "open-market purchase", "S": "open-market sale"}
 
 
@@ -48,6 +50,10 @@ class Form4:
 
     def shares(self, code: str) -> float:
         return sum(t.shares for t in self.trades if t.code == code)
+
+    @property
+    def is_cfo(self) -> bool:
+        return any(_CFO_RE.search(r) for r in self.roles)
 
 
 def _text(el: ET.Element | None, path: str) -> str | None:
@@ -175,11 +181,14 @@ class Thresholds:
     min_buy_usd: float = 100_000
     min_sell_usd: float = 1_000_000
     skip_planned_sales: bool = True
+    cfo_only: bool = False
 
 
 def significance(f: Form4, th: Thresholds) -> tuple[bool, str]:
     """(worth an LLM call and possibly a signal, why)."""
     buy, sell = f.total("P"), f.total("S")
+    if th.cfo_only and not f.is_cfo:
+        return False, "not a CFO"
     if buy >= th.min_buy_usd:
         return True, f"open-market purchase {_usd(buy)}"
     if sell >= th.min_sell_usd:

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Инсайдеры{% endblock %}
+{% block content %}
+<header class="page">
+  <div>
+    <h1>Инсайдеры</h1>
+    <p class="sub">Сделки на рынке по Form 4 (покупки и продажи; гранты и опционы не показаны). В LLM и бот идут только сделки CFO выше порогов.</p>
+  </div>
+</header>
+
+<form class="filters" method="get" action="/insiders" aria-label="Фильтры">
+  <label class="f">Роль
+    <select name="role"><option value="">Все</option>{% for k, v in ROLES.items() %}<option value="{{ k }}" {{ 'selected' if k == f.role }}>{{ v }}</option>{% endfor %}</select>
+  </label>
+  <label class="f">Сделка
+    <select name="side"><option value="">Любая</option>{% for k, v in SIDES.items() %}<option value="{{ k }}" {{ 'selected' if k == f.side }}>{{ v }}</option>{% endfor %}</select>
+  </label>
+  <label class="f">Поиск<input type="search" name="q" value="{{ f.q }}" placeholder="тикер или компания" style="width: 180px;"></label>
+  <label class="f">Сумма от, $<input type="number" name="min_usd" value="{{ f.min_usd | int if f.min_usd else '' }}" min="0" step="10000" placeholder="0" style="width: 120px;"></label>
+  <label class="f">Период
+    <select name="days">{% for k, v in PERIODS.items() %}<option value="{{ k }}" {{ 'selected' if k == f.days }}>{{ v }}</option>{% endfor %}</select>
+  </label>
+  <label class="check"><input type="checkbox" name="planned" value="hide" {{ 'checked' if f.hide_planned }}> Без плана 10b5-1</label>
+  <button type="submit" class="primary">Показать</button>
+  <a href="/insiders" class="small">Сбросить</a>
+</form>
+
+<p class="small muted" style="margin: 0 0 12px;">
+  Сделок: {{ totals.n }}{% if totals.n >= 500 %} (первые 500){% endif %} ·
+  <span class="up">▲ {{ totals.buys }} на {{ totals.buy_usd | usd }}</span> ·
+  <span class="down">▼ {{ totals.sells }} на {{ totals.sell_usd | usd }}</span> ·
+  в боте {{ totals.sent }}
+</p>
+
+<section class="card" aria-label="Сделки" style="padding: 0; overflow-x: auto;">
+  <table>
+    <thead><tr style="background: #faf9f6;">
+      <th style="padding-left: 16px;">Подана</th><th>Дата сделки</th><th>Компания</th><th>Кто</th>
+      <th class="num">Сумма</th><th class="num">Ср. цена</th><th style="padding-right: 16px;">Что с ней</th>
+    </tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td class="mono small" style="padding-left: 16px;">{{ r.filed | dt('%d.%m.%y') }}</td>
+        <td class="mono small muted">{{ r.traded.strftime('%d.%m.%y') if r.traded else '—' }}</td>
+        <td><a href="/chart?symbol={{ r.ticker }}" class="mono" style="font-weight: 500;">{{ r.ticker or '—' }}</a>
+          <div class="small muted ellipsis" style="max-width: 200px;" title="{{ r.issuer }}">{{ r.issuer }}</div></td>
+        <td class="small"><div class="ellipsis" style="max-width: 220px;" title="{{ r.roles }}">{{ r.roles }}</div>
+          <div class="muted ellipsis" style="max-width: 220px;" title="{{ r.owners }}">{{ r.owners }}</div></td>
+        <td class="num {{ 'up' if r.buy else 'down' }}" style="font-weight: 500;">{{ '▲' if r.buy else '▼' }} {{ r.usd | usd }}
+          {% if r.planned %}<div class="small muted">10b5-1</div>{% endif %}</td>
+        <td class="num small">{{ '$%.2f' % r.price if r.price else '—' }}</td>
+        <td class="small" style="padding-right: 16px;">
+          {% if r.status == 'sent' %}<a href="/news?id={{ r.id }}">в боте</a>
+          {% elif r.status == 'llm' %}<a href="/news?id={{ r.id }}">в LLM</a>
+          {% else %}<span class="muted">{{ r.why | why_ru }}</span>{% endif %}
+          {% if r.url %} · <a href="{{ r.url }}" target="_blank" rel="noopener">SEC</a>{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="empty">Сделок по фильтру нет</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

@@ -285,3 +285,34 @@ def test_subscribers_page(admin):
     html = admin.get("/subscribers").text
     assert "@alice" in html and "бот работает" in html
     assert "Правила рассылки" in html and "выключена" in html
+
+
+def test_insiders_page(admin, engine, cfg):
+    def filing(acc, role, code, shares, price, skip=None):
+        f4 = {
+            "ticker": "ACME",
+            "issuer_name": "Acme Corp",
+            "owners": [f"{role} Person"],
+            "roles": [role],
+            "planned": False,
+            "trades": [{"code": code, "shares": shares, "price": price, "date": "2026-09-22"}],
+        }
+        raw = {"form4": f4, "significance": "open-market purchase", "dedup_title": "exact"}
+        if skip:
+            raw["llm_skip"] = skip
+        return RawItem(acc, f"Form 4 · ACME · {role} {acc}", "b",
+                       f"https://www.sec.gov/{acc}.txt", NOW, raw)  # fmt: skip
+
+    with engine.begin() as conn:
+        ingest(conn, news_spec("sec_edgar", title_dedup=False), Batch([
+            filing("a1", "EVP & CFO", "P", 1000, 150.0),
+            filing("a2", "Director", "S", 500, 20.0, skip="not a CFO"),
+            filing("a3", "CFO", "M", 100, 1.0, skip="no open-market trades"),
+        ]), cfg, NOW)  # fmt: skip
+    cfo = admin.get("/insiders").text  # CFO by default
+    assert "EVP &amp; CFO" in cfo and "▲ $150K" in cfo and "в LLM" in cfo
+    assert "Director Person" not in cfo and "Сделок: 1 " in cfo  # option exercise is noise
+    everyone = admin.get("/insiders?role=&side=sell").text
+    assert "Director Person" in everyone and "не CFO" in everyone
+    assert "EVP &amp; CFO" not in everyone
+    assert "Сделок по фильтру нет" in admin.get("/insiders?q=zzz").text

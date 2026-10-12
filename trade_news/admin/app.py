@@ -26,8 +26,9 @@ from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 
 from trade_news import delivery, prices, sectors, views
-from trade_news.admin import chart, data, market
+from trade_news.admin import chart, data, insiders, market
 from trade_news.api import create_api
+from trade_news.collectors.form4 import _usd
 from trade_news.config import Config
 
 log = structlog.get_logger()
@@ -78,7 +79,7 @@ def _ago(value: datetime | None, now: datetime) -> str:
     return f"{minutes // 1440} дн назад"
 
 
-TEMPLATES.env.filters.update(int=_int, dt=_dt)
+TEMPLATES.env.filters.update(int=_int, dt=_dt, usd=_usd, why_ru=insiders.why_ru)
 TEMPLATES.env.globals.update(ASSET_CLASSES=ASSET_CLASSES)
 
 DIRECTION = {
@@ -204,6 +205,23 @@ def create_app(deps: AdminDeps) -> FastAPI:
             chart=market.yield_chart(macro.yields),
             insiders=insiders,
             unlocks=unlocks,
+        )
+
+    @app.get("/insiders", response_class=HTMLResponse)
+    def insiders_page(request: Request):
+        f = insiders.InsiderFilter.from_params(request.query_params)
+        with deps.engine.connect() as conn:
+            rows = insiders.trades(conn, deps.now(), f)
+        return render(
+            request,
+            "insiders.html",
+            "insiders",
+            f=f,
+            rows=rows,
+            totals=insiders.totals(rows),
+            ROLES={k: v[0] for k, v in insiders.ROLES.items()},
+            SIDES=insiders.SIDES,
+            PERIODS=insiders.PERIODS,
         )
 
     @app.get("/news", response_class=HTMLResponse)

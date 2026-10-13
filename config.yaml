@@ -38,6 +38,9 @@ crypto:                  # liquidation websocket streams, started by `run` (trad
   exchanges: [binance, bybit, okx]
 
 rate_limits:
+  moex:                  # MOEX ISS, free; be polite
+    calls: 4
+    period: 1
   crypto:                # Binance/Bybit/OKX public REST; OKX rubik stats allow 5 per 2 s
     calls: 3
     period: 1
@@ -123,6 +126,35 @@ sources:
       always: [BTC, ETH]
       top: 10                  # + the largest by open interest (Bybit), re-ranked daily
       exclude: [XAUT, XAU, PAXG, USDC, USDE]   # gold and stablecoin contracts
+
+  # Russia (part C of docs/tasks/forced-flows.md)
+  # Minfin FX operations: minfin.gov.ru is closed to non-Russian IPs, so the monthly announcement
+  # is read from TASS / RIA / Vedomosti feeds around the 3rd business day; polls only then.
+  ru_minfin:
+    interval_seconds: 600
+    params:
+      window_days: 3
+      # Bank of Russia "mirroring" of NWF spending, announced twice a year; negative = sells.
+      # H2 2026: sales 0.58 bn RUB/day (cbr.ru, 2026-06-29). UPDATE in January and July.
+      cbr_mirroring_rub_bn_day: -0.58
+
+  # Dividend cut-offs of IMOEX members (smart-lab.ru calendar + ISS index composition).
+  moex_dividends:
+    interval_seconds: 21600
+    params:
+      major_yield_pct: 7       # or
+      major_weight_pct: 3      # weight in IMOEX, %
+
+  # Open positions of individuals / legal entities in MOEX futures (ISS, daily, no key).
+  # Each run also walks the history back backfill_per_run days, down to backfill_from.
+  moex_open_positions:
+    interval_seconds: 3600
+    rate_limit: moex
+    params:
+      assets: [Si, RTS, CNY]
+      lookback_days: 5
+      backfill_per_run: 30
+      backfill_from: "2021-01-01"
 
   # Vesting schedules from DefiLlama (no key). Project files are up to ~17 MB and parsed as a
   # stream; per_run of them each run, so the whole list (~370) is refreshed every ~2.5 days.

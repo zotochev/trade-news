@@ -55,6 +55,7 @@ SOURCE_RU = {
     "fred": "FRED",
     "ff_calendar": "Календарь + FRED",
     "token_unlocks": "DefiLlama",
+    "ru_minfin": "ТАСС / РИА / Ведомости",
     **CENTRAL_BANKS,
 }
 MAX_LEN = 4096  # Telegram message limit
@@ -98,6 +99,8 @@ def _kind(source: str, event_type: str | None, raw: dict) -> tuple[str, str]:
         return "💼", "Инсайдер"
     if source == "token_unlocks":
         return "🔓", "Разблокировка токенов"
+    if source == "ru_minfin":
+        return "🇷🇺", "Минфин: валюта по бюджетному правилу"
     if source in CENTRAL_BANKS:
         emoji, kind = EVENT_KIND.get(event_type, ("🏦", ""))
         return emoji, f"{CENTRAL_BANKS[source]}{': ' + kind.lower() if kind else ''}"

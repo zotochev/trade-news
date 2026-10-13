@@ -35,6 +35,9 @@ TYPES = {
     "btc_halving": "Халвинг BTC",
     "ru_minfin_announce": "Анонс Минфина РФ",
     "ru_tax_period": "Налоговый период РФ",
+    "ru_minfin_ops": "Операции Минфина РФ",
+    "ru_dividend_cutoff": "Дивидендная отсечка",
+    "ru_fx_rule": "Норма продажи валютной выручки",
 }
 MARKETS = {
     "us_equity": "Акции США",

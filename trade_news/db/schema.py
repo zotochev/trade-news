@@ -404,6 +404,23 @@ crypto_liquidations = sa.Table(
     sa.Index(None, "minute"),
 )
 
+# MOEX futures open positions of individuals vs legal entities, daily (collector
+# moex_open_positions). Contracts; kept forever.
+moex_open_positions = sa.Table(
+    "moex_open_positions",
+    metadata,
+    sa.Column("trade_date", sa.Date, nullable=False),
+    sa.Column("asset", sa.String(16), nullable=False),  # Si, RTS, CNY, ...
+    sa.Column("is_fiz", sa.Boolean, nullable=False),  # individuals (True) / legal entities
+    sa.Column("persons_long", sa.Integer),
+    sa.Column("persons_short", sa.Integer),
+    sa.Column("long", sa.Float),  # open position, contracts
+    sa.Column("short", sa.Float),
+    sa.Column("change_long", sa.Float),
+    sa.Column("change_short", sa.Float),
+    sa.PrimaryKeyConstraint("asset", "trade_date", "is_fiz"),
+)
+
 # Vesting releases of crypto tokens (collector token_unlocks): the first sighting is kept
 token_unlocks = sa.Table(
     "token_unlocks",

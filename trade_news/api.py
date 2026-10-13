@@ -23,7 +23,14 @@ from trade_news import sectors as sector_ref
 from trade_news import views
 from trade_news.annotation.whale import whale_of
 from trade_news.crypto import history as crypto_history
-from trade_news.db.schema import annotations, assets, item_assets, items, raw_items
+from trade_news.db.schema import (
+    annotations,
+    assets,
+    item_assets,
+    items,
+    moex_open_positions,
+    raw_items,
+)
 from trade_news.flows import calendar as flows_calendar
 
 API_VERSION = "1.0"
@@ -76,6 +83,22 @@ class Leverage(BaseModel):
     snapshots: list[DerivSnapshot]
     totals: list[DerivTotal]
     liquidations: list[LiquidationMinute]
+
+
+class PositionsSide(BaseModel):
+    long: float | None = Field(description="Open long position, contracts")
+    short: float | None = Field(description="Open short position, contracts")
+    net: float | None = Field(description="long - short")
+    persons_long: int | None = Field(description="How many holders are long")
+    persons_short: int | None
+    change_long: float | None = Field(description="Change over the day, contracts")
+    change_short: float | None
+
+
+class OpenPositionsDay(BaseModel):
+    date: date
+    individuals: PositionsSide | None = Field(description="Физлица")
+    legal: PositionsSide | None = Field(description="Юрлица")
 
 
 class CalendarEvent(BaseModel):
@@ -433,6 +456,42 @@ def create_api(engine: sa.Engine) -> FastAPI:
             totals=[DerivTotal(**t) for t in crypto_history.totals(snaps)],
             liquidations=[LiquidationMinute(**r) for r in liq],
         )  # fmt: skip
+
+    @api.get(
+        "/ru/open-positions",
+        response_model=list[OpenPositionsDay],
+        summary="MOEX futures open positions of individuals vs legal entities, daily",
+    )
+    def ru_open_positions(
+        asset: Annotated[str, Query(description="Si, RTS, CNY (case as on MOEX)")],
+        from_: Annotated[
+            date | None, Query(alias="from", description="Default: to - 90 days")
+        ] = None,
+        to: Annotated[date | None, Query(description="Default: today")] = None,
+    ) -> list[OpenPositionsDay]:
+        end = to or datetime.now(UTC).date()
+        start = from_ or end - timedelta(days=90)
+        if end < start or end - start > timedelta(days=3700):
+            raise HTTPException(422, "`to` must be after `from`, at most ~10 years apart")
+        m = moex_open_positions.c
+        with engine.connect() as conn:
+            rows = conn.execute(
+                sa.select(moex_open_positions)
+                .where(m.asset == asset.strip(), m.trade_date.between(start, end))
+                .order_by(m.trade_date)
+            ).mappings()
+            days: dict[date, dict] = {}
+            for r in rows:
+                side = PositionsSide(
+                    **{k: r[k] for k in ("long", "short", "persons_long", "persons_short",
+                                         "change_long", "change_short")},
+                    net=r["long"] - r["short"] if r["long"] is not None and r["short"] is not None
+                    else None,
+                )  # fmt: skip
+                days.setdefault(r["trade_date"], {})["individuals" if r["is_fiz"] else "legal"] = (
+                    side
+                )
+        return [OpenPositionsDay(date=d, **v) for d, v in days.items()]
 
     @api.get("/sectors", response_model=list[SectorRef], summary="Sector / industry keys")
     def list_sectors() -> list[SectorRef]:

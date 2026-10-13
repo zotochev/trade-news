@@ -23,6 +23,7 @@ from trade_news.db.schema import (
     econ_events,
     items,
     macro_observations,
+    moex_open_positions,
     rate_expectations,
     raw_items,
     token_unlocks,
@@ -43,6 +44,7 @@ ROW_TABLES = {
     "econ_events": (econ_events, ()),
     "token_unlocks": (token_unlocks, ("protocol", "unlock_at")),
     "crypto_derivs": (crypto_derivs, ("symbol", "exchange", "ts")),
+    "moex_open_positions": (moex_open_positions, ("asset", "trade_date", "is_fiz")),
 }
 # {name: (table, key column, rows to leave alone)}: dates move (earnings), sizes get announced
 UPSERT_TABLES = {

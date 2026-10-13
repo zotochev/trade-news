@@ -43,7 +43,7 @@ MATERIAL_EVENTS = [
     "insider",
 ]  # fmt: skip
 MAX_ATTEMPTS = 5
-ALWAYS_SOURCES = ["ff_calendar", "cme_fedwatch", "fred", "token_unlocks"]
+ALWAYS_SOURCES = ["ff_calendar", "cme_fedwatch", "fred", "token_unlocks", "ru_minfin"]
 WHALE = annotations.c.payload_json[("whale", "whale")].as_boolean()
 
 

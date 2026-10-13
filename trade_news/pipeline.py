@@ -14,8 +14,9 @@ import structlog
 
 from trade_news.collectors.base import Batch, CollectorSpec, Context, RawItem
 from trade_news.config import Config
-from trade_news.db.engine import insert_ignore, insert_ignore_many
+from trade_news.db.engine import insert_ignore, insert_ignore_many, upsert_many
 from trade_news.db.schema import (
+    calendar_events,
     collector_runs,
     collector_state,
     econ_events,
@@ -31,7 +32,7 @@ from trade_news.http import RateLimiter, make_getter
 log = structlog.get_logger()
 
 # Tables a collector may fill through Batch.rows: existing rows (same key) are left as is;
-# a table without key columns is append-only.
+# a table without key columns is append-only. UPSERT_TABLES are updated by their key instead.
 ROW_TABLES = {
     "rate_expectations": (
         rate_expectations,
@@ -40,6 +41,10 @@ ROW_TABLES = {
     "macro_observations": (macro_observations, ("series_id", "obs_date")),
     "econ_events": (econ_events, ()),
     "token_unlocks": (token_unlocks, ("protocol", "unlock_at")),
+}
+# {name: (table, key column, rows to leave alone)}: dates move (earnings), sizes get announced
+UPSERT_TABLES = {
+    "calendar_events": (calendar_events, "key", calendar_events.c.edited.is_(True)),
 }
 
 # SQLite has a single writer anyway, and dedup must see items written by other sources.
@@ -98,9 +103,13 @@ def ingest(
         if _upsert_item(conn, spec, it, raw_id, fetched_at, cfg):
             stats.dedup_merged += 1
     for name, rows in batch.rows.items():
-        table, conflict_cols = ROW_TABLES[name]
         if not rows:
             continue
+        if name in UPSERT_TABLES:
+            table, key, keep = UPSERT_TABLES[name]
+            stats.rows += upsert_many(conn, table, rows, key, keep)
+            continue
+        table, conflict_cols = ROW_TABLES[name]
         if conflict_cols:
             stats.rows += insert_ignore_many(conn, table, rows, *conflict_cols)
         else:  # snapshot tables: the collector only sends changed rows

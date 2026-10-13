@@ -40,6 +40,30 @@ def insert_ignore_many(
     return conn.execute(sa.select(sa.func.count()).select_from(table)).scalar() - before
 
 
+def upsert_many(
+    conn: sa.Connection,
+    table: sa.Table,
+    rows: list[dict[str, Any]],
+    conflict_col: str,
+    keep_where: sa.ColumnElement[bool] | None = None,
+) -> int:
+    """INSERT ... ON CONFLICT DO UPDATE of the given columns. Rows matching `keep_where`
+    (e.g. edited by hand) are left as is. Returns the number of new rows."""
+    if not rows:
+        return 0
+    stmt = _insert(conn, table)
+    cols = [c for c in rows[0] if c != conflict_col]
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[conflict_col],
+        set_={c: stmt.excluded[c] for c in cols},
+        where=None if keep_where is None else sa.not_(keep_where),
+    )
+    before = conn.execute(sa.select(sa.func.count()).select_from(table)).scalar()
+    for i in range(0, len(rows), 1000):
+        conn.execute(stmt, rows[i : i + 1000])
+    return conn.execute(sa.select(sa.func.count()).select_from(table)).scalar() - before
+
+
 def insert_ignore(conn: sa.Connection, table: sa.Table, rows: list[dict[str, Any]], *conflict_cols):
     """INSERT ... ON CONFLICT DO NOTHING for SQLite and PostgreSQL. Returns inserted ids."""
     if not rows:

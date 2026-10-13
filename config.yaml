@@ -27,6 +27,12 @@ background_digest:       # "Фон рынка": news below the delivery threshol
 
 # Shared limiters. Several sources may point at one key (e.g. all SEC hosts share one quota).
 # Values are deliberately below documented limits.
+flows:                   # forced flows calendar in Telegram (trade_news/flows/notify.py)
+  enabled: true
+  digest_weekday: 0        # Monday
+  digest_hour_utc: 5       # 08:00 Moscow
+  reminder_hour_utc: 15    # major events of the next business day
+
 rate_limits:
   sec:                   # documented: 10 req/s per user across all machines
     calls: 5
@@ -73,6 +79,33 @@ sources:
 
   # CoinDesk RSS, no key, ~25 newest articles. Entries older than max_age_hours are stored
   # but never annotated (the feed returns days of history); 6 h = llm.max_item_age_hours.
+  # Forced flows calendar (trade_news/flows): computed dates a year ahead + RU production
+  # calendar (isdayoff.ru) + BTC halving estimate (mempool.space). Upsert by key: reruns are safe.
+  flow_rules:
+    interval_seconds: 21600
+    params: {horizon_days: 365, refresh_days: 7}
+
+  # Earnings of the largest US companies (-> buyback blackout ~4 weeks before) and IPO lock-ups.
+  # 2 requests per run, shares the Finnhub limit.
+  finnhub_calendar:
+    interval_seconds: 21600
+    rate_limit: finnhub
+    params:
+      earnings_days: 90
+      blackout_days: 28
+      lockup_days: 180
+      min_ipo_usd: 100000000     # lock-ups of IPOs from $100M; major from 5x that
+      symbols: [AAPL, MSFT, NVDA, GOOGL, GOOG, AMZN, META, AVGO, TSLA, BRK.B, LLY, JPM, V, WMT,
+                ORCL, XOM, MA, UNH, COST, NFLX, HD, PG, JNJ, ABBV, BAC, PLTR, KO, CRM, AMD, CVX,
+                TMUS, WFC, CSCO, MRK, PM, IBM, ABT, GE, MU, LIN, MCD, MS, GS, AXP, PEP, DIS,
+                INTU, NOW, ISRG, TMO, UBER, QCOM, CAT, T, VZ, TXN, BKNG, ADBE, AMGN, RTX,
+                ANET, AMAT, LRCX, SPGI, BLK, SCHW, PFE, C, BA, HON]
+
+  # Upcoming Treasury auctions (~10 days ahead, TreasuryDirect, no key); bills are skipped.
+  treasury_auctions:
+    interval_seconds: 21600
+    params: {include_bills: false}
+
   # Vesting schedules from DefiLlama (no key). Project files are up to ~17 MB and parsed as a
   # stream; per_run of them each run, so the whole list (~370) is refreshed every ~2.5 days.
   token_unlocks:

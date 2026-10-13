@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Календарь{% endblock %}
+{% block content %}
+<header class="page">
+  <div>
+    <h1>Календарь вынужденных потоков</h1>
+    <p class="sub">Когда кто-то обязан купить или продать: экспирации, конец месяца, индексы, аукционы, локапы, разлоки, Минфин РФ. Крупные — жирным, по ним напоминание накануне.</p>
+  </div>
+  <a href="/calendar?new=1" class="btn primary">Добавить событие</a>
+</header>
+
+{% if show_form %}
+{% set e = current or {} %}
+<section class="card" aria-labelledby="form-h" style="margin-bottom: 16px;">
+  <div class="card-head"><h2 id="form-h">{{ 'Правка события' if current else 'Новое событие' }}</h2>
+    {% if current and current.source != 'manual' %}<span class="small muted">из источника {{ current.source }}: после правки коллектор его не перезапишет</span>{% endif %}</div>
+  <form method="post" action="/calendar/save" class="filters" style="flex-wrap: wrap;">
+    {% if current %}<input type="hidden" name="id" value="{{ current.id }}">{% endif %}
+    <label class="f">Дата<input type="date" name="event_date" required value="{{ e.event_date or '' }}"></label>
+    <label class="f">До (окно)<input type="date" name="end_date" value="{{ e.end_date or '' }}"></label>
+    <label class="f">Время<input type="time" name="event_time" value="{{ e.event_time or '' }}"></label>
+    <label class="f">Пояс
+      <select name="tz">{% for k, v in TIMEZONES.items() %}<option value="{{ k }}" {{ 'selected' if k == e.tz }}>{{ v }}</option>{% endfor %}</select>
+    </label>
+    <label class="f">Тип
+      <select name="type">{% for k, v in TYPES.items() %}<option value="{{ k }}" {{ 'selected' if k == (e.type or 'index_change') }}>{{ v }}</option>{% endfor %}</select>
+    </label>
+    <label class="f">Рынок
+      <select name="market">{% for k, v in MARKETS.items() %}<option value="{{ k }}" {{ 'selected' if k == e.market }}>{{ v }}</option>{% endfor %}</select>
+    </label>
+    <label class="f">Активы<input name="assets" value="{{ e.assets or '' }}" placeholder="AAPL, MSFT" style="width: 160px;"></label>
+    <label class="f" style="flex: 1 1 320px;">Заголовок<input name="title" required value="{{ e.title or '' }}" placeholder="S&P 500: включение XYZ" style="width: 100%;"></label>
+    <label class="f" style="flex: 1 1 100%;">Кто вынужден и куда<textarea name="details" rows="2" style="width: 100%;">{{ e.details or '' }}</textarea></label>
+    <label class="f" style="flex: 1 1 320px;">Ссылка<input name="url" value="{{ e.url or '' }}" style="width: 100%;"></label>
+    <label class="f">Точность
+      <select name="precision"><option value="exact">точная дата</option><option value="estimated" {{ 'selected' if e.precision == 'estimated' }}>оценка</option></select>
+    </label>
+    <label class="check"><input type="checkbox" name="major" value="1" {{ 'checked' if e.major }}> Крупное</label>
+    <button type="submit" class="primary">Сохранить</button>
+    <a href="/calendar" class="small">Отмена</a>
+  </form>
+  {% if current and current.source == 'manual' %}
+  <form method="post" action="/calendar/{{ current.id }}/delete" style="margin-top: 8px;" onsubmit="return confirm('Удалить событие?');">
+    <button type="submit">Удалить</button>
+  </form>
+  {% endif %}
+</section>
+{% endif %}
+
+<form class="filters" method="get" action="/calendar" aria-label="Фильтры">
+  <label class="f">Тип
+    <select name="type"><option value="">Все</option>{% for k, v in TYPES.items() %}<option value="{{ k }}" {{ 'selected' if k == f.type }}>{{ v }}</option>{% endfor %}</select>
+  </label>
+  <label class="f">Рынок
+    <select name="market"><option value="">Все</option>{% for k, v in MARKETS.items() %}<option value="{{ k }}" {{ 'selected' if k == f.market }}>{{ v }}</option>{% endfor %}</select>
+  </label>
+  <label class="f">Вперёд
+    <select name="weeks">{% for w in WEEKS %}<option value="{{ w }}" {{ 'selected' if w == f.weeks }}>{{ w }} нед.</option>{% endfor %}</select>
+  </label>
+  <label class="check"><input type="checkbox" name="major" value="1" {{ 'checked' if f.major }}> Только крупные</label>
+  <button type="submit" class="primary">Показать</button>
+  <a href="/calendar" class="small">Сбросить</a>
+</form>
+
+{% if hidden %}<p class="small muted" style="margin: 0 0 12px;">Тихие периоды выкупа ({{ hidden }}) скрыты: выберите тип «Тихий период выкупа», чтобы их увидеть.</p>{% endif %}
+<section class="card" aria-label="События" style="padding: 0; overflow-x: auto;">
+  <table>
+    <thead><tr style="background: #faf9f6;">
+      <th style="padding-left: 16px;">Дата</th><th>Время</th><th>Тип</th><th>Событие</th><th>Активы</th><th style="padding-right: 16px;">Источник</th>
+    </tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td class="mono small" style="padding-left: 16px; white-space: nowrap;">{{ WD[r.event_date.weekday()] }} {{ r.event_date.strftime('%d.%m') }}{% if r.end_date and r.end_date != r.event_date %}<div class="muted">до {{ r.end_date.strftime('%d.%m') }}</div>{% endif %}</td>
+        <td class="mono small muted" style="white-space: nowrap;">{{ r.event_time or '' }}{% if r.event_time %} {{ {'America/New_York': 'NY', 'Europe/Moscow': 'МСК'}.get(r.tz, r.tz or '') }}{% endif %}</td>
+        <td class="small">{{ TYPES.get(r.type, r.type) }}<div class="muted">{{ MARKETS.get(r.market, r.market) }}</div></td>
+        <td><span style="{{ 'font-weight: 600;' if r.major }}">{{ r.title }}</span>{% if r.precision == 'estimated' %} <span class="small muted">(оценка)</span>{% endif %}
+          {% if r.details %}<div class="small muted" style="max-width: 560px;">{{ r.details }}</div>{% endif %}</td>
+        <td class="mono small">{{ r.assets or '' }}</td>
+        <td class="small" style="padding-right: 16px; white-space: nowrap;">
+          {% if r.url %}<a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.source }}</a>{% else %}{{ r.source }}{% endif %}
+          {% if r.id %} · <a href="/calendar?edit={{ r.id }}">править</a>{% endif %}
+          {% if r.edited %}<div class="muted">правлено вручную</div>{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="empty">Событий по фильтру нет</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

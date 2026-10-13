@@ -26,10 +26,11 @@ from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 
 from trade_news import delivery, prices, sectors, views
-from trade_news.admin import chart, data, insiders, market
+from trade_news.admin import chart, data, flows, insiders, market
 from trade_news.api import create_api
 from trade_news.collectors.form4 import _usd
 from trade_news.config import Config
+from trade_news.flows import calendar as flows_calendar
 
 log = structlog.get_logger()
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).with_name("templates")))
@@ -206,6 +207,46 @@ def create_app(deps: AdminDeps) -> FastAPI:
             insiders=insiders,
             unlocks=unlocks,
         )
+
+    @app.get("/calendar", response_class=HTMLResponse)
+    def calendar_page(request: Request, edit: int | None = None, new: int = 0):
+        f = flows.CalendarFilter.from_params(request.query_params)
+        with deps.engine.connect() as conn:
+            rows, hidden = flows.rows(conn, deps.now().date(), f)
+            current = flows.get(conn, edit) if edit else None
+        return render(
+            request,
+            "calendar.html",
+            "calendar",
+            f=f,
+            rows=rows,
+            hidden=hidden,
+            current=current,
+            WD=["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"],
+            show_form=bool(current) or new == 1,
+            TYPES=flows_calendar.TYPES,
+            MARKETS=flows_calendar.MARKETS,
+            TIMEZONES=flows.TIMEZONES,
+            WEEKS=flows.WEEKS,
+        )
+
+    @app.post("/calendar/save")
+    async def calendar_save(request: Request):
+        form = {k: str(v) for k, v in (await request.form()).items()}
+        try:
+            with deps.engine.begin() as conn:
+                event_id = flows.save(conn, form, deps.now())
+        except (KeyError, ValueError) as exc:
+            return Response(f"bad form: {exc}", status_code=400)
+        log.info("admin_calendar_saved", id=event_id)
+        return RedirectResponse("/calendar", status_code=303)
+
+    @app.post("/calendar/{event_id}/delete")
+    def calendar_delete(event_id: int):
+        with deps.engine.begin() as conn:
+            flows.delete(conn, event_id)
+        log.info("admin_calendar_deleted", id=event_id)
+        return RedirectResponse("/calendar", status_code=303)
 
     @app.get("/insiders", response_class=HTMLResponse)
     def insiders_page(request: Request):

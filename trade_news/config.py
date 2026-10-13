@@ -77,6 +77,15 @@ class BackgroundConfig(BaseModel):
     max_window_hours: float = Field(default=16, gt=0)
 
 
+class FlowsConfig(BaseModel):
+    """Forced flows calendar in Telegram (trade_news.flows.notify)."""
+
+    enabled: bool = True
+    digest_weekday: int = Field(default=0, ge=0, le=6)  # 0 = Monday
+    digest_hour_utc: int = Field(default=5, ge=0, le=23)
+    reminder_hour_utc: int = Field(default=15, ge=0, le=23)
+
+
 class Config(BaseModel):
     database_url: str = "sqlite:///data/trade_news.db"
     dedup: DedupConfig = Field(default_factory=DedupConfig)
@@ -86,6 +95,7 @@ class Config(BaseModel):
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
     sectors: SectorsConfig = Field(default_factory=SectorsConfig)
     background_digest: BackgroundConfig = Field(default_factory=BackgroundConfig)
+    flows: FlowsConfig = Field(default_factory=FlowsConfig)
 
 
 def load_config(path: str | Path | None = None) -> Config:

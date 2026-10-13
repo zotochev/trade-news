@@ -342,6 +342,35 @@ macro_observations = sa.Table(
     sa.PrimaryKeyConstraint("series_id", "obs_date"),
 )
 
+# Forced flows calendar: dated events when someone must buy or sell (option expiry, month end,
+# index rebalancing, auctions, lock-ups...). Collectors upsert by `key`; rows edited in the
+# admin (`edited`) are not overwritten. Token unlocks and central bank meetings are not copied
+# here: trade_news.flows.calendar merges them in when reading.
+calendar_events = sa.Table(
+    "calendar_events",
+    metadata,
+    _pk(),
+    sa.Column("key", sa.Text, nullable=False, unique=True),  # e.g. "opex_monthly|2026-10-16"
+    sa.Column("type", sa.String(32), nullable=False),
+    sa.Column("market", sa.String(16), nullable=False),  # us_equity us_rates fx crypto ru
+    sa.Column("event_date", sa.Date, nullable=False),
+    sa.Column("end_date", sa.Date),  # windows (buyback blackout)
+    sa.Column("event_time", sa.String(5)),  # "16:00" in `tz`, when known
+    sa.Column("tz", sa.String(32)),
+    sa.Column("assets", sa.Text),  # "AAPL" / "BTC" / "USD/RUB", comma-separated
+    sa.Column("title", sa.Text, nullable=False),
+    sa.Column("details", sa.Text),  # who is forced and which way, in Russian
+    sa.Column("precision", sa.String(16), nullable=False),  # exact | estimated
+    sa.Column("size", sa.Float),
+    sa.Column("size_unit", sa.String(16)),  # usd | pct_supply | ...
+    sa.Column("major", sa.Boolean, nullable=False, default=False),  # eve reminder, bold in digest
+    sa.Column("source", sa.Text, nullable=False),  # rules | finnhub | treasurydirect | manual
+    sa.Column("url", sa.Text),
+    sa.Column("edited", sa.Boolean, nullable=False, default=False),
+    sa.Column("updated_at", UTCDateTime, nullable=False, default=_now),
+    sa.Index(None, "event_date"),
+)
+
 # Vesting releases of crypto tokens (collector token_unlocks): the first sighting is kept
 token_unlocks = sa.Table(
     "token_unlocks",

@@ -12,7 +12,7 @@ client can walk a whole week without gaps or repeats while new items keep arrivi
 from __future__ import annotations
 
 import base64
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Annotated, Literal
 
 import sqlalchemy as sa
@@ -23,6 +23,7 @@ from trade_news import sectors as sector_ref
 from trade_news import views
 from trade_news.annotation.whale import whale_of
 from trade_news.db.schema import annotations, assets, item_assets, items, raw_items
+from trade_news.flows import calendar as flows_calendar
 
 API_VERSION = "1.0"
 MAX_LIMIT = 500
@@ -36,6 +37,25 @@ EventType = Literal[
 
 
 # --- response models (they are the OpenAPI schema) -------------------------------------
+
+
+class CalendarEvent(BaseModel):
+    key: str = Field(description="Stable id: type|date|... (a moved date keeps the key)")
+    type: str = Field(description="Event type, see the README list (opex_monthly, ...)")
+    market: str = Field(description="us_equity | us_rates | fx | crypto | ru")
+    date: date
+    end_date: date | None = Field(description="End of a window (buyback blackout)")
+    time: str | None = Field(description="HH:MM in `tz`, when known")
+    tz: str | None
+    assets: list[str] = Field(description="Tickers / pairs / coins the event is about")
+    title: str = Field(description="Russian, short")
+    details: str | None = Field(description="Russian: who is forced and which way")
+    precision: Literal["exact", "estimated"]
+    major: bool = Field(description="Large event: eve reminder, highlighted in the digest")
+    size: float | None
+    size_unit: str | None = Field(description="usd | pct_supply | block")
+    source: str
+    url: str | None
 
 
 class AssetLink(BaseModel):
@@ -307,6 +327,39 @@ def create_api(engine: sa.Engine) -> FastAPI:
             if not rows:
                 raise HTTPException(404, "not found or not annotated")
             return _to_items(conn, rows)[0]
+
+    @api.get(
+        "/calendar",
+        response_model=list[CalendarEvent],
+        summary="Forced flows calendar: events when someone must buy or sell, by date",
+    )
+    def calendar(
+        from_: Annotated[date | None, Query(alias="from", description="Default: today")] = None,
+        to: Annotated[date | None, Query(description="Inclusive; default: from + 30 days")] = None,
+        types: Annotated[str, Query(description="Comma-separated event types")] = "",
+        markets: Annotated[str, Query(description="Comma-separated markets")] = "",
+        major: Annotated[bool, Query(description="Only major events")] = False,
+    ) -> list[CalendarEvent]:
+        start = from_ or datetime.now().date()
+        end = to or start + timedelta(days=30)
+        if end < start or end - start > timedelta(days=800):
+            raise HTTPException(422, "`to` must be after `from`, at most 800 days apart")
+        with engine.connect() as conn:
+            rows = flows_calendar.events(
+                conn, start, end, [t for t in types.split(",") if t],
+                [m for m in markets.split(",") if m], major,
+            )  # fmt: skip
+        return [
+            CalendarEvent(
+                **{k: r[k] for k in ("key", "type", "market", "end_date", "tz", "title",
+                                     "details", "precision", "major", "size", "size_unit",
+                                     "source", "url")},
+                date=r["event_date"],
+                time=r["event_time"],
+                assets=[a.strip() for a in (r["assets"] or "").split(",") if a.strip()],
+            )
+            for r in rows
+        ]  # fmt: skip
 
     @api.get("/sectors", response_model=list[SectorRef], summary="Sector / industry keys")
     def list_sectors() -> list[SectorRef]:

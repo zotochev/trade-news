@@ -13,6 +13,7 @@ query ...           the spec's target queries (section 3)
 cleanup             delete data older than the retention settings
 sectors [--all]     fill sectors/industries of assets (SEC SIC codes for equities in news)
 background          send the "Фон рынка" digest now (--dry-run: print it, send nothing)
+flows digest|remind send the forced flows week digest / eve reminders now (--dry-run: print)
 admin               the admin web page alone (127.0.0.1:ADMIN_PORT); `run` starts it too
 """
 
@@ -49,6 +50,7 @@ from trade_news.db.schema import (
     llm_calls,
     subscribers,
 )
+from trade_news.flows import notify
 from trade_news.http import RateLimiter, make_getter
 from trade_news.logs import setup_logging
 from trade_news.pipeline import (
@@ -213,6 +215,30 @@ def cmd_run(cfg: Config) -> None:
                 max_instances=1,
                 coalesce=True,
                 misfire_grace_time=600,
+            )
+        if cfg.flows.enabled:
+            scheduler.add_job(
+                run_flows_job,
+                "cron",
+                args=(engine, tg_api, "digest"),
+                day_of_week=cfg.flows.digest_weekday,
+                hour=cfg.flows.digest_hour_utc,
+                minute=0,
+                id="flows_digest",
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=3600,
+            )
+            scheduler.add_job(
+                run_flows_job,
+                "cron",
+                args=(engine, tg_api, "remind"),
+                hour=cfg.flows.reminder_hour_utc,
+                minute=0,
+                id="flows_reminders",
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=3600,
             )
     admin_server = admin_app.start_in_thread(
         admin_app.create_app(
@@ -438,6 +464,31 @@ def cmd_background(cfg: Config, dry_run: bool) -> None:
         background.run_background(engine, api, root_chat_id(), cfg.background_digest, utcnow)
 
 
+def run_flows_job(engine: sa.Engine, api, what: str) -> None:
+    run = notify.run_digest if what == "digest" else notify.run_reminders
+    try:
+        run(engine, api, root_chat_id(), utcnow)
+    except Exception:
+        log.exception("flows_job_failed", what=what)
+
+
+def cmd_flows(cfg: Config, what: str, dry_run: bool) -> None:
+    engine = make_engine(cfg.database_url)
+    if dry_run:
+        today = utcnow().date()
+        if what == "digest":
+            messages = notify.build_digest(engine, today)
+        else:
+            messages = notify.format_reminder(notify.due_reminders(engine, today))
+        print("\n\n=====\n\n".join(messages))
+        return
+    with httpx.Client(timeout=30) as client:
+        api = telegram_api(client)
+        if api is None:
+            raise SystemExit("TELEGRAM_BOT_TOKEN is not set")
+        run_flows_job(engine, api, what)
+
+
 def admin_port() -> int:
     return int(os.environ.get("ADMIN_PORT") or 10000)
 
@@ -618,6 +669,9 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("cleanup")
     bg = sub.add_parser("background")
     bg.add_argument("--dry-run", action="store_true", help="print the digest, send nothing")
+    fl = sub.add_parser("flows")
+    fl.add_argument("what", choices=["digest", "remind"])
+    fl.add_argument("--dry-run", action="store_true", help="print the messages, send nothing")
     sc = sub.add_parser("sectors")
     sc.add_argument("--all", action="store_true", help="repeat until nothing is left")
     sub.add_parser("admin")
@@ -654,6 +708,8 @@ def main(argv: list[str] | None = None) -> None:
             cmd_cleanup(cfg)
         case "background":
             cmd_background(cfg, args.dry_run)
+        case "flows":
+            cmd_flows(cfg, args.what, args.dry_run)
         case "sectors":
             cmd_sectors(cfg, args.all)
         case "admin":

@@ -14,6 +14,7 @@ cleanup             delete data older than the retention settings
 sectors [--all]     fill sectors/industries of assets (SEC SIC codes for equities in news)
 background          send the "Фон рынка" digest now (--dry-run: print it, send nothing)
 flows digest|remind send the forced flows week digest / eve reminders now (--dry-run: print)
+crypto-backfill     load the last 29 days of Binance open interest / long-short (5 min)
 admin               the admin web page alone (127.0.0.1:ADMIN_PORT); `run` starts it too
 """
 
@@ -37,6 +38,8 @@ from trade_news.annotation import assets as asset_ref
 from trade_news.annotation.run import annotate_pending
 from trade_news.collectors import discover
 from trade_news.config import Config, load_config
+from trade_news.crypto import backfill as crypto_backfill
+from trade_news.crypto import liquidations
 from trade_news.db import make_engine
 from trade_news.db.schema import (
     annotation_dead_letters,
@@ -44,6 +47,7 @@ from trade_news.db.schema import (
     asset_resolution_queue,
     assets,
     collector_runs,
+    collector_state,
     item_assets,
     item_relevance,
     items,
@@ -191,6 +195,11 @@ def cmd_run(cfg: Config) -> None:
         coalesce=True,
     )
 
+    liq_stop = None
+    if cfg.crypto.liquidations:
+        liq_stop = liquidations.start_in_thread(
+            engine, WRITE_LOCK, utcnow, tuple(cfg.crypto.exchanges)
+        )
     source_list = [(s.name, s.description) for s in specs]
     bot_thread, bot_stop = start_bot(engine, client, source_list) or (None, None)
     if (tg_api := telegram_api(client)) is not None:
@@ -252,6 +261,8 @@ def cmd_run(cfg: Config) -> None:
         log.info("scheduler_stopping", signal=signal.Signals(signum).name)
         if bot_stop is not None:
             bot_stop.set()
+        if liq_stop is not None:
+            liq_stop.set()
         admin_server.should_exit = True
         scheduler.shutdown(wait=True)
 
@@ -489,6 +500,20 @@ def cmd_flows(cfg: Config, what: str, dry_run: bool) -> None:
         run_flows_job(engine, api, what)
 
 
+def cmd_crypto_backfill(cfg: Config, days: int) -> None:
+    engine = make_engine(cfg.database_url)
+    with engine.connect() as conn:
+        cur = conn.execute(
+            sa.select(collector_state.c.cursor).where(collector_state.c.source == "crypto_leverage")
+        ).scalar()
+    symbols = (cur or {}).get("symbols") or ["BTC", "ETH"]
+    limiters: dict = {}
+    with httpx.Client(timeout=30) as client:
+        get = make_getter(client, shared_limiter(cfg, limiters, "crypto"), source="crypto_backfill")
+        n = crypto_backfill.backfill(engine, get, symbols, utcnow(), days)
+    print(f"{n} new snapshots for {', '.join(symbols)}")
+
+
 def admin_port() -> int:
     return int(os.environ.get("ADMIN_PORT") or 10000)
 
@@ -669,6 +694,8 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("cleanup")
     bg = sub.add_parser("background")
     bg.add_argument("--dry-run", action="store_true", help="print the digest, send nothing")
+    cb = sub.add_parser("crypto-backfill")
+    cb.add_argument("--days", type=int, default=30, help="at most 29 (Binance keeps ~30 days)")
     fl = sub.add_parser("flows")
     fl.add_argument("what", choices=["digest", "remind"])
     fl.add_argument("--dry-run", action="store_true", help="print the messages, send nothing")
@@ -708,6 +735,8 @@ def main(argv: list[str] | None = None) -> None:
             cmd_cleanup(cfg)
         case "background":
             cmd_background(cfg, args.dry_run)
+        case "crypto-backfill":
+            cmd_crypto_backfill(cfg, args.days)
         case "flows":
             cmd_flows(cfg, args.what, args.dry_run)
         case "sectors":

@@ -33,7 +33,14 @@ flows:                   # forced flows calendar in Telegram (trade_news/flows/n
   digest_hour_utc: 5       # 08:00 Moscow
   reminder_hour_utc: 15    # major events of the next business day
 
+crypto:                  # liquidation websocket streams, started by `run` (trade_news/crypto)
+  liquidations: true
+  exchanges: [binance, bybit, okx]
+
 rate_limits:
+  crypto:                # Binance/Bybit/OKX public REST; OKX rubik stats allow 5 per 2 s
+    calls: 3
+    period: 1
   sec:                   # documented: 10 req/s per user across all machines
     calls: 5
     period: 1
@@ -94,7 +101,8 @@ sources:
       earnings_days: 90
       blackout_days: 28
       lockup_days: 180
-      min_ipo_usd: 100000000     # lock-ups of IPOs from $100M; major from 5x that
+      min_ipo_usd: 100000000     # lock-ups of IPOs from $100M (SPACs skipped)
+      major_ipo_usd: 3000000000  # major (eve reminder, bold in the digest) from $3B
       symbols: [AAPL, MSFT, NVDA, GOOGL, GOOG, AMZN, META, AVGO, TSLA, BRK.B, LLY, JPM, V, WMT,
                 ORCL, XOM, MA, UNH, COST, NFLX, HD, PG, JNJ, ABBV, BAC, PLTR, KO, CRM, AMD, CVX,
                 TMUS, WFC, CSCO, MRK, PM, IBM, ABT, GE, MU, LIN, MCD, MS, GS, AXP, PEP, DIS,
@@ -105,6 +113,16 @@ sources:
   treasury_auctions:
     interval_seconds: 21600
     params: {include_bills: false}
+
+  # Crypto leverage history (part B of docs/tasks/forced-flows.md): OI, funding, long/short
+  # on Binance, Bybit, OKX every 5 min, ~40 requests per run. Kept forever (crypto_derivs).
+  crypto_leverage:
+    interval_seconds: 300
+    rate_limit: crypto
+    params:
+      always: [BTC, ETH]
+      top: 10                  # + the largest by open interest (Bybit), re-ranked daily
+      exclude: [XAUT, XAU, PAXG, USDC, USDE]   # gold and stablecoin contracts
 
   # Vesting schedules from DefiLlama (no key). Project files are up to ~17 MB and parsed as a
   # stream; per_run of them each run, so the whole list (~370) is refreshed every ~2.5 days.

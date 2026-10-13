@@ -371,6 +371,39 @@ calendar_events = sa.Table(
     sa.Index(None, "event_date"),
 )
 
+# Crypto leverage history (collector crypto_leverage, trade_news/crypto): exchanges serve only
+# current values, so we keep our own series. Not touched by retention: the history is the point.
+crypto_derivs = sa.Table(
+    "crypto_derivs",
+    metadata,
+    sa.Column("exchange", sa.String(16), nullable=False),  # binance | bybit | okx
+    sa.Column("symbol", sa.String(16), nullable=False),  # base coin: BTC, ETH, ...
+    sa.Column("ts", UTCDateTime, nullable=False),  # snapshot time, rounded to 5 minutes
+    sa.Column("oi_usd", sa.Float),  # open interest, USD
+    sa.Column("oi_coins", sa.Float),
+    sa.Column("funding_rate", sa.Float),  # per funding interval, as the exchange quotes it
+    sa.Column("funding_interval_h", sa.Float),
+    sa.Column("long_short_ratio", sa.Float),  # accounts long / short (exchange's own stat)
+    sa.Column("mark_price", sa.Float),
+    sa.PrimaryKeyConstraint("symbol", "exchange", "ts"),
+    sa.Index(None, "ts"),
+)
+
+# Forced liquidations from the exchanges' websocket streams, summed per minute. `side` is the
+# position that was liquidated (long = forced sell). Symbols outside the tracked list -> OTHER.
+crypto_liquidations = sa.Table(
+    "crypto_liquidations",
+    metadata,
+    sa.Column("exchange", sa.String(16), nullable=False),
+    sa.Column("symbol", sa.String(16), nullable=False),
+    sa.Column("minute", UTCDateTime, nullable=False),
+    sa.Column("side", sa.String(8), nullable=False),  # long | short
+    sa.Column("usd", sa.Float, nullable=False),
+    sa.Column("count", sa.Integer, nullable=False),
+    sa.PrimaryKeyConstraint("symbol", "exchange", "minute", "side"),
+    sa.Index(None, "minute"),
+)
+
 # Vesting releases of crypto tokens (collector token_unlocks): the first sighting is kept
 token_unlocks = sa.Table(
     "token_unlocks",

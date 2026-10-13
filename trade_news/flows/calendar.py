@@ -98,7 +98,7 @@ def _cb_meetings(conn, start: date, end: date) -> list[dict]:
     for d in fomc:
         d = d if isinstance(d, date) else date.fromisoformat(str(d)[:10])
         out[("USD", d)] = _base(
-            key=f"cb_meeting|{d}|USD", type="cb_meeting", market="fx", event_date=d,
+            key=f"cb_meeting|{d}|USD", type="cb_meeting", market="us_rates", event_date=d,
             event_time="14:00", tz="America/New_York", assets="USD", major=True,
             title="Решение ФРС по ставке",
             details="Заседание FOMC: решение по ставке и пресс-конференция. Пересчёт позиций "
@@ -117,7 +117,8 @@ def _cb_meetings(conn, start: date, end: date) -> list[dict]:
         if not _DECISION_RE.match(name):
             continue
         out[(cur, when.date())] = _base(
-            key=f"cb_meeting|{when:%Y-%m-%d}|{cur}", type="cb_meeting", market="fx",
+            key=f"cb_meeting|{when:%Y-%m-%d}|{cur}", type="cb_meeting",
+            market="us_rates" if cur == "USD" else "fx",
             event_date=when.date(), event_time=f"{when:%H:%M}", tz="UTC", assets=cur,
             major=True, title=f"Решение {BANKS.get(cur, cur)} по ставке",
             details=f"{name} ({cur}).", source="forexfactory",

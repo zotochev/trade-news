@@ -9,10 +9,13 @@
   Key = earnings|SYMBOL|year-Qn, so a moved date updates the row.
 - /calendar/ipo?from&to: priced IPOs >= `min_ipo_usd`; the lock-up of insiders and early
   investors usually ends 180 days later (estimated: the exact term is in the prospectus).
+  SPACs (blank-check "Acquisition" companies, units like XXXXU) are skipped: their sponsors'
+  shares follow the merger, not the IPO date. Major from `major_ipo_usd`.
 """
 
 from __future__ import annotations
 
+import re
 from datetime import date, timedelta
 
 from trade_news.collectors.base import Batch, Context, collector
@@ -23,6 +26,7 @@ from trade_news.flows.rules import event
 NY = "America/New_York"
 EARNINGS_CAP = 1500
 CHUNK_DAYS = 7
+_SPAC_RE = re.compile(r"acquisition|blank check|merger corp|\bspac\b", re.I)
 HOUR = {"bmo": ("до открытия", "09:00"), "amc": ("после закрытия", "16:05")}
 
 
@@ -62,11 +66,18 @@ def earnings_events(rows: list[dict], symbols: set[str], blackout_days: int) -> 
     return out
 
 
-def lockup_events(rows: list[dict], min_usd: float, lockup_days: int) -> list[dict]:
+def is_spac(r: dict) -> bool:
+    sym = r.get("symbol") or ""
+    return bool(_SPAC_RE.search(r.get("name") or "")) or (len(sym) >= 5 and sym.endswith("U"))
+
+
+def lockup_events(
+    rows: list[dict], min_usd: float, lockup_days: int, major_usd: float
+) -> list[dict]:
     out = []
     for r in rows:
         value = r.get("totalSharesValue") or 0
-        if r.get("status") != "priced" or not r.get("symbol") or value < min_usd:
+        if r.get("status") != "priced" or not r.get("symbol") or value < min_usd or is_spac(r):
             continue
         ipo = date.fromisoformat(r["date"])
         sym = r["symbol"]
@@ -77,7 +88,7 @@ def lockup_events(rows: list[dict], min_usd: float, lockup_days: int) -> list[di
             "дней инсайдеры и ранние инвесторы получают право продавать: предложение акций "
             "резко растёт. Дата — оценка, точный срок в проспекте.",
             assets=sym, precision="estimated", size=value, size_unit="usd", source="finnhub",
-            major=value >= min_usd * 5, key=f"ipo_lockup|{sym}",
+            major=value >= major_usd, key=f"ipo_lockup|{sym}",
         ))  # fmt: skip
     return out
 
@@ -115,7 +126,12 @@ def fetch(ctx: Context, cursor: dict | None) -> Batch:
         **{"from": (today - timedelta(days=lockup)).isoformat(),
            "to": (today + timedelta(days=ahead - lockup)).isoformat()},
     )  # fmt: skip
-    events += lockup_events(ipos, float(p.get("min_ipo_usd", 100_000_000)), lockup)
+    events += lockup_events(
+        ipos,
+        float(p.get("min_ipo_usd", 100_000_000)),
+        lockup,
+        float(p.get("major_ipo_usd", 3_000_000_000)),
+    )
     for e in events:
         e["updated_at"] = now
     return Batch(items=[], cursor=None, rows={"calendar_events": events})

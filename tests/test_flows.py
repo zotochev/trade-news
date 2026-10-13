@@ -111,7 +111,13 @@ def test_finnhub_calendar_asks_week_by_week():
             return SimpleNamespace(json=lambda: {"earningsCalendar": rows})
         ipos = [
             {"date": "2026-04-17", "name": "Big IPO", "symbol": "BIG", "status": "priced",
+             "totalSharesValue": 5_000_000_000},
+            {"date": "2026-04-17", "name": "Mid", "symbol": "MID", "status": "priced",
              "totalSharesValue": 625_000_000},
+            {"date": "2026-04-17", "name": "Rich Acquisition Corp", "symbol": "RICH",
+             "status": "priced", "totalSharesValue": 300_000_000},
+            {"date": "2026-04-17", "name": "Unit Co", "symbol": "SPCXU", "status": "priced",
+             "totalSharesValue": 300_000_000},
             {"date": "2026-04-17", "name": "Small", "symbol": "SML", "status": "priced",
              "totalSharesValue": 50_000_000},
         ]  # fmt: skip
@@ -132,7 +138,9 @@ def test_finnhub_calendar_asks_week_by_week():
         2026, 10, 13
     )
     assert keys["ipo_lockup|BIG"]["event_date"] == date(2026, 10, 14)
-    assert keys["ipo_lockup|BIG"]["major"] and "ipo_lockup|SML" not in keys
+    assert keys["ipo_lockup|BIG"]["major"] and not keys["ipo_lockup|MID"]["major"]
+    assert "ipo_lockup|SML" not in keys  # below min_ipo_usd
+    assert "ipo_lockup|RICH" not in keys and "ipo_lockup|SPCXU" not in keys  # SPACs
     assert not any("TINY" in k for k in keys)
 
 
@@ -195,7 +203,7 @@ def test_calendar_merges_sources(engine):
 
 def test_calendar_api(admin, engine):  # noqa: F811
     _fill(engine)
-    resp = admin.get("/api/calendar?from=2026-09-21&to=2026-09-30&markets=crypto,fx")
+    resp = admin.get("/api/calendar?from=2026-09-21&to=2026-09-30&markets=crypto,us_rates")
     assert resp.status_code == 200
     body = resp.json()
     assert [e["type"] for e in body] == ["token_unlock", "cb_meeting"]

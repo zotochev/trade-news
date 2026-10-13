@@ -19,6 +19,7 @@ from trade_news.db.schema import (
     calendar_events,
     collector_runs,
     collector_state,
+    crypto_derivs,
     econ_events,
     items,
     macro_observations,
@@ -41,6 +42,7 @@ ROW_TABLES = {
     "macro_observations": (macro_observations, ("series_id", "obs_date")),
     "econ_events": (econ_events, ()),
     "token_unlocks": (token_unlocks, ("protocol", "unlock_at")),
+    "crypto_derivs": (crypto_derivs, ("symbol", "exchange", "ts")),
 }
 # {name: (table, key column, rows to leave alone)}: dates move (earnings), sizes get announced
 UPSERT_TABLES = {

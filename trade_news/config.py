@@ -86,6 +86,13 @@ class FlowsConfig(BaseModel):
     reminder_hour_utc: int = Field(default=15, ge=0, le=23)
 
 
+class CryptoConfig(BaseModel):
+    """Liquidation streams (trade_news.crypto.liquidations), started by `run`."""
+
+    liquidations: bool = True
+    exchanges: list[str] = Field(default_factory=lambda: ["binance", "bybit", "okx"])
+
+
 class Config(BaseModel):
     database_url: str = "sqlite:///data/trade_news.db"
     dedup: DedupConfig = Field(default_factory=DedupConfig)
@@ -96,6 +103,7 @@ class Config(BaseModel):
     sectors: SectorsConfig = Field(default_factory=SectorsConfig)
     background_digest: BackgroundConfig = Field(default_factory=BackgroundConfig)
     flows: FlowsConfig = Field(default_factory=FlowsConfig)
+    crypto: CryptoConfig = Field(default_factory=CryptoConfig)
 
 
 def load_config(path: str | Path | None = None) -> Config:

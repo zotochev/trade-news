@@ -12,7 +12,7 @@ client can walk a whole week without gaps or repeats while new items keep arrivi
 from __future__ import annotations
 
 import base64
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Literal
 
 import sqlalchemy as sa
@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 from trade_news import sectors as sector_ref
 from trade_news import views
 from trade_news.annotation.whale import whale_of
+from trade_news.crypto import history as crypto_history
 from trade_news.db.schema import annotations, assets, item_assets, items, raw_items
 from trade_news.flows import calendar as flows_calendar
 
@@ -36,7 +37,45 @@ EventType = Literal[
 ]  # fmt: skip
 
 
+def _utc(dt: datetime) -> datetime:
+    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt.astimezone(UTC)
+
+
 # --- response models (they are the OpenAPI schema) -------------------------------------
+
+
+class DerivSnapshot(BaseModel):
+    ts: datetime = Field(description="UTC, 5-minute grid")
+    exchange: str = Field(description="binance | bybit | okx")
+    oi_usd: float | None = Field(description="Open interest, USD")
+    oi_coins: float | None
+    funding_rate: float | None = Field(description="Per funding interval, as quoted")
+    funding_interval_h: float | None
+    funding_8h: float | None = Field(description="Funding normalised to 8 hours")
+    long_short_ratio: float | None = Field(description="Accounts long / short (exchange stat)")
+    mark_price: float | None
+
+
+class DerivTotal(BaseModel):
+    ts: datetime
+    oi_usd: float | None = Field(description="Sum over the exchanges")
+    funding_8h: float | None = Field(description="Weighted by open interest")
+    exchanges: int = Field(description="How many exchanges are in the sum")
+
+
+class LiquidationMinute(BaseModel):
+    minute: datetime = Field(description="UTC, start of the minute")
+    exchange: str
+    side: Literal["long", "short"] = Field(description="Positions liquidated (long = forced sell)")
+    usd: float
+    count: int
+
+
+class Leverage(BaseModel):
+    asset: str
+    snapshots: list[DerivSnapshot]
+    totals: list[DerivTotal]
+    liquidations: list[LiquidationMinute]
 
 
 class CalendarEvent(BaseModel):
@@ -360,6 +399,40 @@ def create_api(engine: sa.Engine) -> FastAPI:
             )
             for r in rows
         ]  # fmt: skip
+
+    @api.get(
+        "/crypto/leverage",
+        response_model=Leverage,
+        summary="Crypto leverage history: open interest, funding, long/short, liquidations",
+    )
+    def crypto_leverage(
+        asset: Annotated[
+            str,
+            Query(
+                description="Base coin: BTC, ETH, ...; OTHER for "
+                "liquidations outside the tracked list"
+            ),
+        ],
+        from_: Annotated[
+            datetime | None, Query(alias="from", description="Default: to - 24h")
+        ] = None,
+        to: Annotated[datetime | None, Query(description="Default: now (UTC)")] = None,
+        exchange: Annotated[str, Query(description="binance | bybit | okx; empty: all")] = "",
+    ) -> Leverage:
+        end = _utc(to) if to else datetime.now(UTC)
+        start = _utc(from_) if from_ else end - timedelta(days=1)
+        if end < start or end - start > timedelta(days=92):
+            raise HTTPException(422, "`to` must be after `from`, at most 92 days apart")
+        asset = asset.strip().upper()
+        with engine.connect() as conn:
+            snaps = crypto_history.snapshots(conn, asset, start, end, exchange)
+            liq = crypto_history.liquidations(conn, asset, start, end, exchange)
+        return Leverage(
+            asset=asset,
+            snapshots=[DerivSnapshot(**r) for r in snaps],  # extra keys (symbol) are ignored
+            totals=[DerivTotal(**t) for t in crypto_history.totals(snaps)],
+            liquidations=[LiquidationMinute(**r) for r in liq],
+        )  # fmt: skip
 
     @api.get("/sectors", response_model=list[SectorRef], summary="Sector / industry keys")
     def list_sectors() -> list[SectorRef]:

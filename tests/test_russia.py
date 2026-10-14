@@ -6,6 +6,7 @@ from tests.test_admin import admin  # noqa: F401  (the fixture: admin app over `
 from trade_news import delivery
 from trade_news.collectors import moex_dividends, moex_open_positions, ru_minfin
 from trade_news.collectors.base import Context
+from trade_news.db.schema import moex_open_positions as positions_table
 from trade_news.flows.rules import ru_fallback_workday
 from trade_news.pipeline import ingest
 
@@ -146,3 +147,14 @@ def test_open_positions_recent_days_and_history_walk(engine, cfg, admin):  # noq
     assert len(body) == 8 and body[0]["date"] == "2026-09-14"
     assert body[-1]["individuals"]["net"] == 1146573 - 195838
     assert body[-1]["legal"]["persons_long"] == 338
+
+
+def test_open_positions_day_with_one_side_only(engine, admin):  # noqa: F811
+    with engine.begin() as conn:
+        conn.execute(positions_table.insert().values(
+            trade_date=date(2022, 4, 21), asset="CNY", is_fiz=True, long=10, short=4,
+        ))  # fmt: skip
+    resp = admin.get("/api/ru/open-positions?asset=CNY&from=2022-04-01&to=2022-04-28")
+    assert resp.status_code == 200
+    (day,) = resp.json()
+    assert day["legal"] is None and day["individuals"]["net"] == 6

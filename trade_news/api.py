@@ -97,8 +97,8 @@ class PositionsSide(BaseModel):
 
 class OpenPositionsDay(BaseModel):
     date: date
-    individuals: PositionsSide | None = Field(description="Физлица")
-    legal: PositionsSide | None = Field(description="Юрлица")
+    individuals: PositionsSide | None = Field(None, description="Физлица; null if MOEX gave none")
+    legal: PositionsSide | None = Field(None, description="Юрлица; null if MOEX gave none")
 
 
 class CalendarEvent(BaseModel):

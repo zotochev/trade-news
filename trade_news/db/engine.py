@@ -44,17 +44,18 @@ def upsert_many(
     conn: sa.Connection,
     table: sa.Table,
     rows: list[dict[str, Any]],
-    conflict_col: str,
+    conflict_col: str | tuple[str, ...],
     keep_where: sa.ColumnElement[bool] | None = None,
 ) -> int:
     """INSERT ... ON CONFLICT DO UPDATE of the given columns. Rows matching `keep_where`
     (e.g. edited by hand) are left as is. Returns the number of new rows."""
     if not rows:
         return 0
+    keys = (conflict_col,) if isinstance(conflict_col, str) else conflict_col
     stmt = _insert(conn, table)
-    cols = [c for c in rows[0] if c != conflict_col]
+    cols = [c for c in rows[0] if c not in keys]
     stmt = stmt.on_conflict_do_update(
-        index_elements=[conflict_col],
+        index_elements=list(keys),
         set_={c: stmt.excluded[c] for c in cols},
         where=None if keep_where is None else sa.not_(keep_where),
     )

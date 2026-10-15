@@ -421,6 +421,35 @@ moex_open_positions = sa.Table(
     sa.PrimaryKeyConstraint("asset", "trade_date", "is_fiz"),
 )
 
+# Daily net flows into US spot crypto ETFs, million USD per fund (collector etf_flows, Farside).
+# Upserted: Farside fills a day in during the next morning and revises late reports.
+etf_flows = sa.Table(
+    "etf_flows",
+    metadata,
+    sa.Column("asset", sa.String(8), nullable=False),  # BTC | ETH
+    sa.Column("trade_date", sa.Date, nullable=False),
+    sa.Column("fund", sa.String(16), nullable=False),  # IBIT, FBTC, GBTC, ...
+    sa.Column("flow_usd_m", sa.Float, nullable=False),  # negative = outflow
+    sa.Column("updated_at", UTCDateTime, nullable=False),
+    sa.PrimaryKeyConstraint("asset", "trade_date", "fund"),
+)
+
+# Crypto held by public companies, one snapshot per day (collector crypto_treasuries, CoinGecko).
+crypto_treasuries = sa.Table(
+    "crypto_treasuries",
+    metadata,
+    sa.Column("coin", sa.String(8), nullable=False),  # BTC | ETH
+    sa.Column("snapshot_date", sa.Date, nullable=False),
+    sa.Column("name", sa.Text, nullable=False),
+    sa.Column("symbol", sa.Text),  # MSTR.US, 3350.T, ...
+    sa.Column("country", sa.String(8)),
+    sa.Column("holdings", sa.Float, nullable=False),  # coins
+    sa.Column("entry_value_usd", sa.Float),
+    sa.Column("value_usd", sa.Float),
+    sa.Column("pct_supply", sa.Float),
+    sa.PrimaryKeyConstraint("coin", "snapshot_date", "name"),
+)
+
 # Vesting releases of crypto tokens (collector token_unlocks): the first sighting is kept
 token_unlocks = sa.Table(
     "token_unlocks",

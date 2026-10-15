@@ -156,6 +156,16 @@ sources:
       backfill_per_run: 30
       backfill_from: "2021-01-01"
 
+  # Part D: US spot crypto ETF flows (Farside, whole history each run, 2 requests; a browser
+  # User-Agent is needed past Cloudflare) and public company holdings (CoinGecko, daily).
+  etf_flows:
+    interval_seconds: 10800
+    params: {assets: [BTC, ETH]}
+
+  crypto_treasuries:
+    interval_seconds: 21600      # first snapshot of a UTC day is kept
+    params: {coins: [BTC, ETH]}
+
   # Vesting schedules from DefiLlama (no key). Project files are up to ~17 MB and parsed as a
   # stream; per_run of them each run, so the whole list (~370) is refreshed every ~2.5 days.
   token_unlocks:

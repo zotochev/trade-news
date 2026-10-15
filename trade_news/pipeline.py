@@ -20,7 +20,9 @@ from trade_news.db.schema import (
     collector_runs,
     collector_state,
     crypto_derivs,
+    crypto_treasuries,
     econ_events,
+    etf_flows,
     items,
     macro_observations,
     moex_open_positions,
@@ -45,10 +47,12 @@ ROW_TABLES = {
     "token_unlocks": (token_unlocks, ("protocol", "unlock_at")),
     "crypto_derivs": (crypto_derivs, ("symbol", "exchange", "ts")),
     "moex_open_positions": (moex_open_positions, ("asset", "trade_date", "is_fiz")),
+    "crypto_treasuries": (crypto_treasuries, ("coin", "snapshot_date", "name")),
 }
 # {name: (table, key column, rows to leave alone)}: dates move (earnings), sizes get announced
 UPSERT_TABLES = {
     "calendar_events": (calendar_events, "key", calendar_events.c.edited.is_(True)),
+    "etf_flows": (etf_flows, ("asset", "trade_date", "fund"), None),
 }
 
 # SQLite has a single writer anyway, and dedup must see items written by other sources.

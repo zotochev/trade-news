@@ -26,6 +26,8 @@ from trade_news.crypto import history as crypto_history
 from trade_news.db.schema import (
     annotations,
     assets,
+    crypto_treasuries,
+    etf_flows,
     item_assets,
     items,
     moex_open_positions,
@@ -99,6 +101,35 @@ class OpenPositionsDay(BaseModel):
     date: date
     individuals: PositionsSide | None = Field(None, description="Физлица; null if MOEX gave none")
     legal: PositionsSide | None = Field(None, description="Юрлица; null if MOEX gave none")
+
+
+class EtfFlow(BaseModel):
+    date: date
+    fund: str = Field(description="Ticker: IBIT, FBTC, GBTC, ... / ETHA, FETH, ...")
+    flow_usd_m: float = Field(description="Net flow, million USD; negative = outflow")
+
+
+class EtfDayTotal(BaseModel):
+    date: date
+    flow_usd_m: float = Field(description="Sum over the funds reported that day")
+    funds: int = Field(description="How many funds have a number for the day")
+
+
+class EtfFlows(BaseModel):
+    asset: Literal["BTC", "ETH"]
+    flows: list[EtfFlow]
+    totals: list[EtfDayTotal]
+
+
+class TreasuryHolding(BaseModel):
+    date: date  # snapshot day, UTC (a Field() here would shadow the `date` type)
+    name: str
+    symbol: str | None = Field(description="Ticker with exchange suffix: MSTR.US, 3350.T")
+    country: str | None
+    holdings: float = Field(description="Coins held")
+    entry_value_usd: float | None = Field(description="Cost basis, as reported")
+    value_usd: float | None
+    pct_supply: float | None = Field(description="% of the coin's total supply")
 
 
 class CalendarEvent(BaseModel):
@@ -492,6 +523,74 @@ def create_api(engine: sa.Engine) -> FastAPI:
                     side
                 )
         return [OpenPositionsDay(date=d, **v) for d, v in days.items()]
+
+    @api.get(
+        "/etf/flows",
+        response_model=EtfFlows,
+        summary="Daily net flows into US spot BTC / ETH ETFs, by fund and in total",
+    )
+    def etf_flow_history(
+        asset: Literal["BTC", "ETH"] = "BTC",
+        from_: Annotated[
+            date | None, Query(alias="from", description="Default: to - 90 days")
+        ] = None,
+        to: Annotated[date | None, Query(description="Default: today")] = None,
+    ) -> EtfFlows:
+        end = to or datetime.now(UTC).date()
+        start = from_ or end - timedelta(days=90)
+        if end < start:
+            raise HTTPException(422, "`to` must be after `from`")
+        e = etf_flows.c
+        with engine.connect() as conn:
+            rows = conn.execute(
+                sa.select(e.trade_date, e.fund, e.flow_usd_m)
+                .where(e.asset == asset, e.trade_date.between(start, end))
+                .order_by(e.trade_date, e.fund)
+            ).all()
+        totals: dict[date, list[float]] = {}
+        for r in rows:
+            totals.setdefault(r.trade_date, []).append(r.flow_usd_m)
+        return EtfFlows(
+            asset=asset,
+            flows=[EtfFlow(date=r.trade_date, fund=r.fund, flow_usd_m=r.flow_usd_m) for r in rows],
+            totals=[EtfDayTotal(date=d, flow_usd_m=round(sum(v), 1), funds=len(v))
+                    for d, v in totals.items()],
+        )  # fmt: skip
+
+    @api.get(
+        "/treasuries",
+        response_model=list[TreasuryHolding],
+        summary="BTC / ETH held by public companies, daily snapshots (our own history)",
+    )
+    def treasuries(
+        coin: Literal["BTC", "ETH"] = "BTC",
+        company: Annotated[
+            str, Query(description="Ticker prefix (MSTR) or name part; empty: all companies")
+        ] = "",
+        from_: Annotated[
+            date | None, Query(alias="from", description="Default: the latest snapshot only")
+        ] = None,
+        to: Annotated[date | None, Query(description="Default: today")] = None,
+    ) -> list[TreasuryHolding]:
+        t = crypto_treasuries.c
+        with engine.connect() as conn:
+            end = to or datetime.now(UTC).date()
+            if from_ is None:
+                latest = conn.execute(
+                    sa.select(sa.func.max(t.snapshot_date)).where(
+                        t.coin == coin, t.snapshot_date <= end
+                    )
+                ).scalar()
+                start = end = latest or end
+            else:
+                start = from_
+            q = sa.select(crypto_treasuries).where(
+                t.coin == coin, t.snapshot_date.between(start, end)
+            )
+            if c := company.strip():
+                q = q.where(sa.or_(t.symbol.ilike(f"{c}.%"), t.symbol == c, t.name.ilike(f"%{c}%")))
+            rows = conn.execute(q.order_by(t.snapshot_date, t.holdings.desc())).mappings().all()
+        return [TreasuryHolding(date=r["snapshot_date"], **r) for r in rows]
 
     @api.get("/sectors", response_model=list[SectorRef], summary="Sector / industry keys")
     def list_sectors() -> list[SectorRef]:

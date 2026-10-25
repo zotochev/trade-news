@@ -8,6 +8,7 @@
   Friday: Saturday to Monday). Keys already reminded are kept in `settings`, so a restart does
   not repeat them.
 Both are sent only when the delivery is enabled (same switch as the news).
+The delivery rules also pick the markets shown (`calendar_markets`, `calendar_banks`).
 """
 
 from __future__ import annotations
@@ -125,8 +126,9 @@ def _split(head: str, lines: list[str]) -> list[str]:
 def build_digest(engine: sa.Engine, today: date) -> list[str]:
     start, end = calendar.week_bounds(today)
     with engine.connect() as conn:
+        rules = delivery.load_rules(conn)
         events = calendar.events(conn, start, end)
-    return format_week(events, start, end)
+    return format_week([e for e in events if delivery.calendar_wanted(rules, e)], start, end)
 
 
 def due_reminders(engine: sa.Engine, today: date) -> list[dict]:
@@ -135,10 +137,15 @@ def due_reminders(engine: sa.Engine, today: date) -> list[dict]:
     while last.weekday() >= 5:
         last += timedelta(days=1)
     with engine.connect() as conn:
+        rules = delivery.load_rules(conn)
         events = calendar.events(conn, today + timedelta(days=1), last, major_only=True)
         done = _reminded(conn)
     # a window (blackout) is only reminded when it starts
-    return [e for e in events if e["key"] not in done and e["event_date"] > today]
+    return [
+        e
+        for e in events
+        if e["key"] not in done and e["event_date"] > today and delivery.calendar_wanted(rules, e)
+    ]
 
 
 def _reminded(conn) -> dict:

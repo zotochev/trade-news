@@ -260,6 +260,11 @@ def test_admin_rules_preview_and_save(admin, engine):  # noqa: F811
     with engine.connect() as conn:
         saved = delivery.load_rules(conn)
     assert saved.enabled and saved.min_importance == 4 and saved.watchlist == ["AAPL", "NVDA"]
+    with engine.begin() as conn:  # fields the form doesn't show survive a save
+        delivery.save_rules(conn, saved.model_copy(update={"macro_keywords": ["Fed"]}), NOW)
+    admin.post("/delivery/rules", data=form | {"action": "save"}, follow_redirects=False)
+    with engine.connect() as conn:
+        assert delivery.load_rules(conn).macro_keywords == ["Fed"]
     bad = admin.post("/delivery/rules", data=form | {"max_per_hour": "999", "action": "save"})
     assert "не сохранены" in bad.text
 
@@ -271,6 +276,39 @@ def test_priority_sources_skip_thresholds():
     assert passes(rules, weak, "rate_decision", "fed_rss")
     assert not passes(rules, weak, "macro", "finnhub_market_news")
     assert not passes(DeliveryRules(min_importance=5, always_sources=[]), weak, "macro", "fred")
+
+
+def test_topic_holds_for_whales_and_priority_events():
+    crypto = DeliveryRules(
+        asset_classes=["crypto", "macro", "rates"],
+        macro_keywords=[r"\bFed\b", r"ФРС", r"\bUS10Y\b"],
+        watchlist=["MSTR"],
+        watchlist_min_importance=4,
+    )
+    stake = [link(importance=5)]  # a 13D whale in some stock
+    assert passes(DeliveryRules(), stake, "insider", "sec_edgar", whale=True)
+    assert not passes(crypto, stake, "insider", "sec_edgar", whale=True)
+    rates = [link(asset_class="rates", symbol=None, importance=2, direction="neutral")]
+    assert passes(crypto, rates, "rate_decision", "finnhub_market_news", text="Fed holds")
+    assert not passes(crypto, rates, "rate_decision", "x", text="Bank of Korea holds rates")
+    assert not passes(crypto, [link(importance=5)], "rate_decision", "x", text="Fed and CoreWeave")
+    yields = [link(asset_class="rates", symbol="US10Y", label="US10Y", importance=4)]
+    assert passes(crypto, yields, "macro", "x", text="10-year yield drops")  # by the label
+    assert passes(crypto, [link(asset_class="crypto", symbol="BTC", importance=4)], "macro", "x")
+    assert passes(crypto, [link(importance=1), link(symbol="MSTR", importance=4)], "other", "x")
+    assert passes(crypto, [], "other", "token_unlocks")  # always_sources skip the topic
+
+
+def test_calendar_markets_and_banks():
+    rules = DeliveryRules(calendar_markets=["crypto", "us_rates"], calendar_banks=["ЕЦБ"])
+    ev = {"market": "fx", "type": "cb_meeting", "title": "Решение ЕЦБ по ставке"}
+    assert delivery.calendar_wanted(rules, ev)
+    assert not delivery.calendar_wanted(rules, ev | {"title": "Решение РБНЗ по ставке"})
+    assert not delivery.calendar_wanted(rules, {"market": "us_equity", "type": "earnings",
+                                                "title": "Отчёт AAPL"})  # fmt: skip
+    assert delivery.calendar_wanted(rules, {"market": "crypto", "type": "token_unlock",
+                                            "title": "ARB"})  # fmt: skip
+    assert delivery.calendar_wanted(DeliveryRules(), ev | {"market": "us_equity"})
 
 
 def test_format_calendar_release():

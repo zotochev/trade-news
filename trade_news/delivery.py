@@ -5,6 +5,8 @@ Delivery is OFF until enabled there.
 
 An item passes when its main link (the primary one with the highest importance) meets the
 thresholds, or when any of its links is a watchlist asset at the watchlist threshold.
+`asset_classes` and `macro_keywords` (the topic) also hold for whales and priority event types;
+only `always_sources` skip everything.
 Every (item, chat) pair gets one `deliveries` row: pending → sent | failed | skipped. The row is
 checked before sending and updated after, so nothing is sent twice; Telegram being down leaves
 rows pending for the next run.
@@ -62,6 +64,13 @@ class DeliveryRules(BaseModel):
     # direction thresholds and go first.
     always_sources: list[str] = Field(default_factory=lambda: list(ALWAYS_SOURCES))
     always_event_types: list[str] = Field(default_factory=lambda: ["rate_decision"])
+    # Regexes (case-insensitive) over title + summary + link labels: when set, news whose main
+    # link is macro / rates pass only on a match (e.g. the Fed, the ECB, the BoJ, not India).
+    macro_keywords: list[str] = Field(default_factory=list)
+    # Calendar digest / reminders (flows.notify): markets to show (empty: all) and central banks
+    # whose meetings are shown in any market (a name in the event title, e.g. "ЕЦБ").
+    calendar_markets: list[str] = Field(default_factory=list)
+    calendar_banks: list[str] = Field(default_factory=list)
 
 
 def load_rules(conn: sa.Connection) -> DeliveryRules:
@@ -78,6 +87,14 @@ def save_rules(conn: sa.Connection, rules: DeliveryRules, now: datetime) -> None
         conn.execute(settings.insert().values(key=SETTINGS_KEY, value=value, updated_at=now))
 
 
+def calendar_wanted(rules: DeliveryRules, event: dict) -> bool:
+    if not rules.calendar_markets or event["market"] in rules.calendar_markets:
+        return True
+    return event["type"] == "cb_meeting" and any(
+        bank in event["title"] for bank in rules.calendar_banks
+    )
+
+
 def is_priority(
     rules: DeliveryRules, source: str | None, event_type: str | None, whale: bool = False
 ) -> bool:
@@ -86,14 +103,27 @@ def is_priority(
     return whale or source in rules.always_sources or event_type in rules.always_event_types
 
 
+MACRO_CLASSES = ("macro", "rates")
+
+
+def _topic_ok(rules: DeliveryRules, main: dict, text: str) -> bool:
+    if rules.asset_classes and main.get("asset_class") not in rules.asset_classes:
+        return False
+    if rules.macro_keywords and main.get("asset_class") in MACRO_CLASSES:
+        return any(re.search(p, text, re.IGNORECASE) for p in rules.macro_keywords)
+    return True
+
+
 def passes(
     rules: DeliveryRules,
     links: list[dict],
     event_type: str | None,
     source: str | None = None,
     whale: bool = False,
+    text: str = "",
 ) -> bool:
-    if is_priority(rules, source, event_type, whale):
+    """`text`: title and summary, for `macro_keywords`."""
+    if source in rules.always_sources:
         return True
     watch = {s.upper() for s in rules.watchlist}
     if any(
@@ -104,15 +134,18 @@ def passes(
         return True
     primary = [link for link in links if link.get("is_primary")] or links
     if not primary:
-        return False
+        return is_priority(rules, source, event_type, whale)
     main = max(primary, key=lambda link: link.get("importance") or 0)
+    labels = " ".join(link["label"] for link in links if link.get("label"))
+    if not _topic_ok(rules, main, f"{text}\n{labels}"):
+        return False
+    if is_priority(rules, source, event_type, whale):
+        return True
     if (main.get("importance") or 0) < rules.min_importance:
         return False
     if rules.require_direction and main.get("direction") in (None, "neutral"):
         return False
-    if rules.event_types and event_type not in rules.event_types:
-        return False
-    return not rules.asset_classes or main.get("asset_class") in rules.asset_classes
+    return not rules.event_types or event_type in rules.event_types
 
 
 def matching_items(
@@ -127,6 +160,8 @@ def matching_items(
             annotations.c.item_id,
             views.EVENT_TYPE.label("event_type"),
             items.c.source,
+            items.c.title,
+            views.SUMMARY.label("summary"),
             WHALE.label("whale"),
         )
         .join(items, items.c.id == annotations.c.item_id)
@@ -142,7 +177,14 @@ def matching_items(
     ok = [
         r
         for r in rows
-        if passes(rules, links.get(r.item_id, []), r.event_type, r.source, bool(r.whale))
+        if passes(
+            rules,
+            links.get(r.item_id, []),
+            r.event_type,
+            r.source,
+            bool(r.whale),
+            f"{r.title or ''}\n{r.summary or ''}",
+        )
     ]
     # priority signals first: the per-hour cap must not hold them behind ordinary news
     ok.sort(key=lambda r: not is_priority(rules, r.source, r.event_type, bool(r.whale)))

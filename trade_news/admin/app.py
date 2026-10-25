@@ -437,21 +437,28 @@ def create_app(deps: AdminDeps) -> FastAPI:
     @app.post("/delivery/rules", response_class=HTMLResponse)
     async def delivery_rules(request: Request):
         form = await request.form()
+        with deps.engine.connect() as conn:
+            kept = delivery.load_rules(conn).model_dump()  # fields the form doesn't show
         try:
             rules = delivery.DeliveryRules(
-                enabled=form.get("enabled") == "1",
-                min_importance=int(form.get("min_importance") or 3),
-                require_direction=form.get("require_direction") == "1",
-                event_types=[e for e in form.getlist("event_types") if e in delivery.EVENT_TYPES],
-                asset_classes=[c for c in form.getlist("asset_classes") if c in ASSET_CLASSES],
-                watchlist=[
-                    s.strip().upper()
-                    for s in str(form.get("watchlist") or "").replace(";", ",").split(",")
-                    if s.strip()
-                ],
-                watchlist_min_importance=int(form.get("watchlist_min_importance") or 3),
-                max_per_hour=int(form.get("max_per_hour") or 6),
-                max_age_hours=float(form.get("max_age_hours") or 6),
+                **kept
+                | dict(
+                    enabled=form.get("enabled") == "1",
+                    min_importance=int(form.get("min_importance") or 3),
+                    require_direction=form.get("require_direction") == "1",
+                    event_types=[
+                        e for e in form.getlist("event_types") if e in delivery.EVENT_TYPES
+                    ],
+                    asset_classes=[c for c in form.getlist("asset_classes") if c in ASSET_CLASSES],
+                    watchlist=[
+                        s.strip().upper()
+                        for s in str(form.get("watchlist") or "").replace(";", ",").split(",")
+                        if s.strip()
+                    ],
+                    watchlist_min_importance=int(form.get("watchlist_min_importance") or 3),
+                    max_per_hour=int(form.get("max_per_hour") or 6),
+                    max_age_hours=float(form.get("max_age_hours") or 6),
+                )
             )
         except (ValueError, ValidationError) as exc:
             return subscribers_view(request, error=f"Правила не сохранены: {exc}")

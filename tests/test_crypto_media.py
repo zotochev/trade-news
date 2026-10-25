@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 from tests.conftest import FIXTURES, fake_ctx
-from trade_news.collectors.coindesk import FEED_URL, fetch
+from trade_news.collectors.crypto_media import FEED_URL, fetch, fetch_decrypt
 
 FEED = (FIXTURES / "coindesk.xml").read_bytes()
 
@@ -35,3 +35,16 @@ def test_old_entries_skipped_for_llm():
     )
     ctx = replace(ctx, now=lambda: datetime(2026, 9, 27, tzinfo=UTC))
     assert all(it.raw["llm_skip"] for it in fetch(ctx, None).items)
+
+
+def test_skip_categories():
+    seen = []
+
+    def get(url, **kw):
+        seen.append(url)
+        return SimpleNamespace(content=FEED)
+
+    ctx = fake_ctx(get=get, params={"skip_categories": ["Opinion"]})
+    titles = [it.title for it in fetch_decrypt(ctx, None).items]
+    assert seen == ["https://decrypt.co/feed"]
+    assert len(titles) == 2 and not any(t.startswith("Tokenization is moving") for t in titles)

@@ -45,12 +45,16 @@ CENTRAL_BANKS = {
     "boe_rss": "Банк Англии",
     "boj_rss": "Банк Японии",
 }
+CRYPTO_MEDIA = ("coindesk", "cointelegraph", "decrypt", "theblock")
 SOURCE_RU = {
     "sec_edgar": "SEC EDGAR",
     "finnhub_market_news": "Finnhub",
     "finnhub_company_news": "Finnhub",
     "marketaux": "Marketaux",
     "coindesk": "CoinDesk",
+    "cointelegraph": "Cointelegraph",
+    "decrypt": "Decrypt",
+    "theblock": "The Block",
     "cme_fedwatch": "CME FedWatch",
     "fred": "FRED",
     "ff_calendar": "Календарь + FRED",
@@ -104,7 +108,7 @@ def _kind(source: str, event_type: str | None, raw: dict) -> tuple[str, str]:
     if source in CENTRAL_BANKS:
         emoji, kind = EVENT_KIND.get(event_type, ("🏦", ""))
         return emoji, f"{CENTRAL_BANKS[source]}{': ' + kind.lower() if kind else ''}"
-    if source == "coindesk" and event_type not in EVENT_KIND:
+    if source in CRYPTO_MEDIA and event_type not in EVENT_KIND:
         return "🪙", "Крипта"
     return EVENT_KIND.get(event_type, ("📰", "Новость"))
 

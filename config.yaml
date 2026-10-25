@@ -186,7 +186,21 @@ sources:
       lead_days: 3             # news item this far ahead of the release
       horizon_days: 365        # releases kept in the table / cursor
 
+  # Crypto outlets (trade_news/collectors/crypto_media.py). CoinDesk's firewall answers 403 to
+  # this server since 2026-10-23, so it is off; the other three replace it.
   coindesk:
+    enabled: false
+    interval_seconds: 300
+    params: {max_age_hours: 6}
+  cointelegraph:
+    interval_seconds: 300
+    params: {max_age_hours: 6}
+  decrypt:
+    interval_seconds: 300
+    params:
+      max_age_hours: 6
+      skip_categories: [Artificial Intelligence, Gaming, Our Company]
+  theblock:
     interval_seconds: 300
     params: {max_age_hours: 6}
 

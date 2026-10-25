@@ -7,9 +7,10 @@ import sqlalchemy as sa
 from tests.conftest import NOW, fake_ctx, news_spec
 from tests.test_admin import admin  # noqa: F401  (the fixture: admin app over `engine`)
 from trade_news.collectors import crypto_leverage as cl
+from trade_news.collectors import crypto_orderbook as ob
 from trade_news.crypto import history
 from trade_news.crypto import liquidations as liq
-from trade_news.db.schema import crypto_derivs, crypto_liquidations
+from trade_news.db.schema import crypto_derivs, crypto_liquidations, crypto_orderbook
 from trade_news.pipeline import ingest
 
 MS = int(NOW.timestamp() * 1000)
@@ -172,4 +173,73 @@ def test_leverage_api(admin, engine):  # noqa: F811
     assert {s["exchange"] for s in one["snapshots"]} == {"bybit"} and one["liquidations"] == []
     assert (
         admin.get("/api/crypto/leverage?asset=BTC&from=2026-01-01&to=2026-09-01").status_code == 422
+    )
+
+
+# --- order book depth -----------------------------------------------------------------
+
+
+def test_depth_bands_and_coverage():
+    bids = [(100.0, 1.0), (99.95, 2.0), (99.6, 1.0)]  # reaches -0.4 %
+    asks = [(100.2, 1.0), (100.6, 1.0), (101.5, 1.0)]  # reaches +1.4 %
+    d = ob.depth(bids, asks, limit=3)  # all levels used: the venue may have more
+    assert d["mid"] == 100.1 and abs(d["spread"] - 0.2) < 1e-9
+    assert d["bid_01"] == 100.0  # edge 99.9999: 99.95 is outside
+    assert d["bid_05"] is None and d["bid_1"] is None  # the book stops at -0.4 %
+    assert d["ask_01"] == 100.2 and d["ask_05"] == 100.2 + 100.6
+    assert abs(d["ask_1"] - (100.2 + 100.6)) < 1e-9  # 101.5 is beyond +1 %
+    whole = ob.depth(bids, asks, limit=500)  # fewer levels than asked: the whole side came
+    assert whole["bid_1"] == 100.0 + 199.9 + 99.6
+
+
+def _book_get(url, params=None, **kw):
+    def ok(data):
+        return SimpleNamespace(json=lambda: data)
+
+    levels = {"bids": [["80000", "2"], ["79990", "1"]], "asks": [["80010", "1"], ["80020", "3"]]}
+    if url.endswith("/public/instruments"):
+        return ok({"data": [{"ctVal": "0.01"}]})
+    if url.endswith("/market/books-full"):
+        assert params["instId"] == "BTC-USDT-SWAP"
+        return ok({"data": [{"bids": [["80000", "200", "0", "3"]],
+                             "asks": [["80010", "100", "0", "1"]]}]})  # fmt: skip
+    if url.endswith("/v5/market/orderbook"):
+        raise ConnectionError("bybit down")
+    if url.endswith("/depth"):
+        return ok(levels)
+    raise AssertionError(url)
+
+
+def test_orderbook_collector(engine, cfg):
+    batch = ob.fetch(fake_ctx(get=_book_get, params={"symbols": ["BTC"]}), None)
+    rows = {r["venue"]: r for r in batch.rows["crypto_orderbook"]}
+    assert set(rows) == {"binance_spot", "binance_perp", "okx_perp"}  # bybit failed alone
+    assert rows["okx_perp"]["bid_01"] == 80000 * 200 * 0.01  # contracts x ctVal
+    assert rows["binance_spot"]["ask_1"] == 80010 + 80020 * 3
+    assert rows["binance_spot"]["ts"] == cl.snapshot_ts(NOW)
+    assert batch.cursor["okx_ct_val"] == {"BTC": 0.01}
+    spec = news_spec("crypto_orderbook", title_dedup=False)
+    with engine.begin() as conn:
+        assert ingest(conn, spec, batch, cfg, NOW).rows == 3
+        assert ingest(conn, spec, batch, cfg, NOW).rows == 0
+
+
+def test_orderbook_api(admin, engine):  # noqa: F811
+    with engine.begin() as conn:
+        conn.execute(crypto_orderbook.insert(), [
+            {"venue": v, "symbol": "BTC", "ts": NOW - timedelta(minutes=5 * i), "mid": 80000,
+             "spread": 0.1, "bid_01": 7e6, "ask_01": 6e6, "bid_05": None, "ask_05": None,
+             "bid_1": None, "ask_1": None}
+            for i in range(2) for v in ("binance_spot", "okx_perp")
+        ])  # fmt: skip
+    q = f"/api/crypto/orderbook?asset=btc&to={NOW.isoformat().replace('+00:00', 'Z')}"
+    body = admin.get(q).json()
+    assert body["asset"] == "BTC" and len(body["snapshots"]) == 4
+    assert body["snapshots"][0]["bid_01"] == 7e6 and body["snapshots"][0]["bid_05"] is None
+    assert {s["venue"] for s in admin.get(q + "&venue=okx_perp").json()["snapshots"]} == {
+        "okx_perp"
+    }
+    assert (
+        admin.get("/api/crypto/orderbook?asset=BTC&from=2026-01-01&to=2026-09-01").status_code
+        == 422
     )

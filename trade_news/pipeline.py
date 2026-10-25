@@ -20,6 +20,7 @@ from trade_news.db.schema import (
     collector_runs,
     collector_state,
     crypto_derivs,
+    crypto_orderbook,
     crypto_treasuries,
     econ_events,
     etf_flows,
@@ -46,6 +47,7 @@ ROW_TABLES = {
     "econ_events": (econ_events, ()),
     "token_unlocks": (token_unlocks, ("protocol", "unlock_at")),
     "crypto_derivs": (crypto_derivs, ("symbol", "exchange", "ts")),
+    "crypto_orderbook": (crypto_orderbook, ("symbol", "venue", "ts")),
     "moex_open_positions": (moex_open_positions, ("asset", "trade_date", "is_fiz")),
     "crypto_treasuries": (crypto_treasuries, ("coin", "snapshot_date", "name")),
 }

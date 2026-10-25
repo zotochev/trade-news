@@ -404,6 +404,27 @@ crypto_liquidations = sa.Table(
     sa.Index(None, "minute"),
 )
 
+# Order book depth snapshots every 5 minutes (collector crypto_orderbook): resting bids / asks
+# in USD within ±0.1 / 0.5 / 1 % of mid. None: the book the venue serves doesn't reach that far.
+crypto_orderbook = sa.Table(
+    "crypto_orderbook",
+    metadata,
+    # binance_spot | binance_perp | bybit_perp | okx_perp
+    sa.Column("venue", sa.String(16), nullable=False),
+    sa.Column("symbol", sa.String(16), nullable=False),  # base coin: BTC, ETH
+    sa.Column("ts", UTCDateTime, nullable=False),  # rounded to 5 minutes
+    sa.Column("mid", sa.Float, nullable=False),
+    sa.Column("spread", sa.Float, nullable=False),  # best ask - best bid, quote currency (USDT)
+    sa.Column("bid_01", sa.Float),
+    sa.Column("ask_01", sa.Float),
+    sa.Column("bid_05", sa.Float),
+    sa.Column("ask_05", sa.Float),
+    sa.Column("bid_1", sa.Float),
+    sa.Column("ask_1", sa.Float),
+    sa.PrimaryKeyConstraint("symbol", "venue", "ts"),
+    sa.Index(None, "ts"),
+)
+
 # MOEX futures open positions of individuals vs legal entities, daily (collector
 # moex_open_positions). Contracts; kept forever.
 moex_open_positions = sa.Table(

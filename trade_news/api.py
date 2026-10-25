@@ -26,6 +26,7 @@ from trade_news.crypto import history as crypto_history
 from trade_news.db.schema import (
     annotations,
     assets,
+    crypto_orderbook,
     crypto_treasuries,
     etf_flows,
     item_assets,
@@ -85,6 +86,24 @@ class Leverage(BaseModel):
     snapshots: list[DerivSnapshot]
     totals: list[DerivTotal]
     liquidations: list[LiquidationMinute]
+
+
+class BookSnapshot(BaseModel):
+    ts: datetime = Field(description="UTC, 5-minute grid")
+    venue: str = Field(description="binance_spot | binance_perp | bybit_perp | okx_perp")
+    mid: float = Field(description="(best bid + best ask) / 2, USDT")
+    spread: float = Field(description="Best ask - best bid, USDT")
+    bid_01: float | None = Field(description="Resting bids within -0.1 % of mid, USD")
+    ask_01: float | None = Field(description="Resting asks within +0.1 % of mid, USD")
+    bid_05: float | None = Field(description="Within -0.5 %; null: the served book is shallower")
+    ask_05: float | None
+    bid_1: float | None = Field(description="Within -1 %; null: the served book is shallower")
+    ask_1: float | None
+
+
+class OrderBook(BaseModel):
+    asset: str
+    snapshots: list[BookSnapshot]
 
 
 class PositionsSide(BaseModel):
@@ -487,6 +506,35 @@ def create_api(engine: sa.Engine) -> FastAPI:
             totals=[DerivTotal(**t) for t in crypto_history.totals(snaps)],
             liquidations=[LiquidationMinute(**r) for r in liq],
         )  # fmt: skip
+
+    @api.get(
+        "/crypto/orderbook",
+        response_model=OrderBook,
+        summary="Order book depth near mid every 5 minutes: spot and perpetuals",
+    )
+    def crypto_order_book(
+        asset: Annotated[str, Query(description="BTC | ETH")],
+        from_: Annotated[
+            datetime | None, Query(alias="from", description="Default: to - 24h")
+        ] = None,
+        to: Annotated[datetime | None, Query(description="Default: now (UTC)")] = None,
+        venue: Annotated[
+            str,
+            Query(description="binance_spot | binance_perp | bybit_perp | okx_perp; empty: all"),
+        ] = "",
+    ) -> OrderBook:
+        end = _utc(to) if to else datetime.now(UTC)
+        start = _utc(from_) if from_ else end - timedelta(days=1)
+        if end < start or end - start > timedelta(days=92):
+            raise HTTPException(422, "`to` must be after `from`, at most 92 days apart")
+        asset = asset.strip().upper()
+        c = crypto_orderbook.c
+        q = sa.select(crypto_orderbook).where(c.symbol == asset, c.ts >= start, c.ts <= end)
+        if venue:
+            q = q.where(c.venue == venue)
+        with engine.connect() as conn:
+            rows = conn.execute(q.order_by(c.ts, c.venue)).mappings().all()
+        return OrderBook(asset=asset, snapshots=[BookSnapshot(**r) for r in rows])
 
     @api.get(
         "/ru/open-positions",

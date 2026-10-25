@@ -127,6 +127,15 @@ sources:
       top: 10                  # + the largest by open interest (Bybit), re-ranked daily
       exclude: [XAUT, XAU, PAXG, USDC, USDE]   # gold and stablecoin contracts
 
+  # Order book depth (the «стакан» link, asked by economy-model-lab 2026-10-25): bids / asks in
+  # USD within ±0.1/0.5/1 % of mid on Binance spot + perp, Bybit and OKX perp. 8 requests per
+  # run, ~2300 rows a day. Kept forever (crypto_orderbook).
+  crypto_orderbook:
+    interval_seconds: 300
+    rate_limit: crypto
+    params:
+      symbols: [BTC, ETH]
+
   # Russia (part C of docs/tasks/forced-flows.md)
   # Minfin FX operations: minfin.gov.ru is closed to non-Russian IPs, so the monthly announcement
   # is read from TASS / RIA / Vedomosti feeds around the 3rd business day; polls only then.

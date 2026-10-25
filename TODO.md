@@ -11,7 +11,7 @@
   `sudo -n /usr/bin/systemctl restart trade-news` (sudoers без пароля ровно на неё; без sudo и с
   `.service` — Access denied; процесс не убивать). Миграции применяются сами (`ExecStartPre`).
   `/opt` принадлежит root: новую папку там создаёт владелец (`sudo mkdir … && sudo chown crip`).
-- **Всё в одном процессе `trade-news run`:** 22 сборщика (см. `config.yaml → sources`), разметка
+- **Всё в одном процессе `trade-news run`:** 23 сборщика (см. `config.yaml → sources`), разметка
   (раз в 2 мин), рассылка (раз в 1 мин), дайджест/напоминания календаря, потоки ликвидаций
   (websocket, отдельные потоки), очистка, Telegram-бот, админка и API на `127.0.0.1:10000`.
 - **Бот:** @criptradenewsbot. Владелец `TELEGRAM_CHAT_ID` получает рассылку всегда; активных
@@ -29,8 +29,8 @@
 - **Ключи в `.env`:** SEC_USER_AGENT, FINNHUB, GEMINI, TELEGRAM, MARKETAUX, FRED.
 - **Потребитель API:** дашборд `/opt/economy-model-lab` (сессия Claude `economy-model`, пишет через
   cross-session сообщения; отвечать ей `SendMessage` по имени из `ListAgents`). Он читает
-  `/api/calendar`, `/api/crypto/leverage`, `/api/ru/open-positions`, `/api/etf/flows`,
-  `/api/treasuries` напрямую с `127.0.0.1:10000` (без basic auth). Задание от него —
+  `/api/calendar`, `/api/crypto/leverage`, `/api/crypto/orderbook`, `/api/ru/open-positions`,
+  `/api/etf/flows`, `/api/treasuries` напрямую с `127.0.0.1:10000` (без basic auth). Задание от него —
   `docs/tasks/forced-flows.md`, части A–D сделаны.
 - **Remote-сессии Claude на сервере:** `claude remote-control` в `/opt/trade-news`,
   `/opt/economy-model-lab`, `/opt/fat-control` (запуск: `cd <папка> && setsid nohup claude
@@ -166,6 +166,23 @@ Form 4 без деталей, и ingest сохранял её новой вер�
       смотреть лог `ru_minfin_found` и формулировки); зеркалирование ЦБ — константа в config,
       обновлять в январе и июле; smart-lab — HTML без API (при смене вёрстки коллектор падает
       с понятной ошибкой «smart-lab table header changed»).
+
+## Крипта отдельно: модель «причины → участники → стакан → цена» (с 2026-10-25)
+
+Миссия проекта — ментальная модель рынка для трейдера. Заказчик хочет поверхностные модели,
+которые помещаются в голову: цепочка «причины → участники → стакан → цена», 2–3 показателя на
+звено (~10 чисел на экран), лишнее не показывать. Идея из книги «The Art and Business of
+Professional Trading» (конспект заказчик пришлёт позже). Начали со звена «стакан».
+Страницу модели делает economy-model-lab (отдельный раздел меню), мы — данные.
+
+- [x] (2026-10-25) Глубина стакана: `crypto_orderbook` раз в 5 мин, BTC/ETH, Binance спот и
+      перп, Bybit и OKX перп, суммы заявок ±0,1/0,5/1%, `GET /api/crypto/orderbook`. Баланс
+      агрессоров (taker) economy-model берёт сам из klines Binance, ликвидации — из
+      `/api/crypto/leverage`. Хрупкое: перпы Binance/Bybit по REST дают только ~±0,1–0,15% у
+      BTC (дальше null); OKX `books-full` — не чаще 1 запроса в 2 с (запросы монет разнесены
+      по краям запуска).
+- [ ] Недостающее по звеньям: «участники» — выпуск стейблкоинов; «стакан» — карта уровней
+      ликвидаций; «причины» — крипторазметка новостей. Делать только по запросу.
 
 ## Дальше, по порядку
 

@@ -243,3 +243,36 @@ def test_orderbook_api(admin, engine):  # noqa: F811
         admin.get("/api/crypto/orderbook?asset=BTC&from=2026-01-01&to=2026-09-01").status_code
         == 422
     )
+
+
+def test_crypto_page_with_data(admin, engine):  # noqa: F811
+    with engine.begin() as conn:
+        conn.execute(crypto_derivs.insert(), [
+            {"exchange": ex, "symbol": "BTC", "ts": cl.snapshot_ts(NOW) - timedelta(hours=h),
+             "oi_usd": oi * (1 - h / 100), "oi_coins": 1.0, "funding_rate": 0.0001,
+             "funding_interval_h": 8, "long_short_ratio": 1.2, "mark_price": 80000 - h * 10}
+            for h in range(0, 30) for ex, oi in (("binance", 2e9), ("okx", 1e9))
+        ])  # fmt: skip
+        conn.execute(crypto_liquidations.insert(), [
+            {"exchange": "okx", "symbol": "BTC", "minute": NOW - timedelta(minutes=m),
+             "side": side, "usd": 1e6, "count": 1}
+            for m, side in ((3, "long"), (90, "short"), (300, "long"))
+        ])  # fmt: skip
+        conn.execute(crypto_orderbook.insert(), [
+            {"venue": v, "symbol": "BTC", "ts": cl.snapshot_ts(NOW), "mid": 80000, "spread": 0.1,
+             "bid_01": 7e6, "ask_01": 3e6, "bid_05": None, "ask_05": None, "bid_1": None,
+             "ask_1": None}
+            for v in ("binance_spot", "binance_perp", "okx_perp")
+        ])  # fmt: skip
+    html = admin.get("/crypto").text
+    assert "$3.0B" in html  # open interest of both exchanges
+    assert "+31.6%" in html  # OI change over 24 h: 3e9 vs 3e9 x 0.76
+    assert "70% пок." in html and "$20.0M" in html  # imbalance; perp sum binance + okx
+    assert "$2.0M" in html  # longs liquidated over 24 h
+    from trade_news.admin import crypto
+
+    with engine.connect() as conn:
+        liq = crypto.liquidations(conn, "BTC", NOW)
+    assert liq["sums"]["1 ч"] == {"long": 1e6, "short": 0.0}
+    assert liq["sums"]["4 ч"] == {"long": 1e6, "short": 1e6}
+    assert crypto.money(-1.25e8, sign=True) == "−$125M" and crypto.money(2.5e9) == "$2.5B"

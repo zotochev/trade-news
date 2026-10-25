@@ -5,7 +5,8 @@ writes finished minutes to crypto_liquidations every 15 s (a late message for a 
 written is added to it). Symbols outside the tracked list (the crypto_leverage collector's
 cursor, re-read every 10 min) go to OTHER, so a cascade in small coins is still counted.
 
-- Binance  wss://fstream.binance.com/ws/!forceOrder@arr: all symbols, but Binance sends at most
+- Binance  wss://fstream.binance.com/market/ws/!forceOrder@arr (the old /ws/ path connects but
+  stays silent, so Binance was missing until 2026-10-25): all symbols, but Binance sends at most
   the latest liquidation per symbol per second: an UNDERCOUNT in a cascade.
   o.S = SELL -> a long was liquidated; USD = o.z (filled qty) x o.ap (average price).
 - Bybit    wss://stream.bybit.com/v5/public/linear, topic allLiquidation.<SYMBOL>: complete, but
@@ -160,7 +161,7 @@ def _run_stream(name: str, agg: Aggregator, stop: threading.Event) -> None:
 def _stream_once(name: str, agg: Aggregator, stop: threading.Event) -> None:
     if name == "binance":
         url, subscribe, ping, parse = (
-            "wss://fstream.binance.com/ws/!forceOrder@arr",
+            "wss://fstream.binance.com/market/ws/!forceOrder@arr",
             None,
             None,
             parse_binance,

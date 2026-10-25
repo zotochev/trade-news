@@ -110,7 +110,18 @@ def admin(engine, cfg):
 
 @pytest.mark.parametrize(
     "path",
-    ["/", "/?hours=168", "/market", "/news", "/llm", "/llm?days=30", "/assets", "/subscribers"],
+    [
+        "/",
+        "/?hours=168",
+        "/market",
+        "/crypto",
+        "/crypto?asset=eth",
+        "/news",
+        "/llm",
+        "/llm?days=30",
+        "/assets",
+        "/subscribers",
+    ],
 )
 def test_pages_render(admin, path):
     r = admin.get(path)

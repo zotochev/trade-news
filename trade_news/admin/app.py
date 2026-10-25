@@ -25,8 +25,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 
-from trade_news import delivery, prices, sectors, views
-from trade_news.admin import chart, data, flows, insiders, market
+from trade_news import delivery, prices, sectors, status, views
+from trade_news.admin import chart, crypto, data, flows, insiders, market
 from trade_news.api import create_api
 from trade_news.collectors.form4 import _usd
 from trade_news.config import Config
@@ -80,7 +80,7 @@ def _ago(value: datetime | None, now: datetime) -> str:
     return f"{minutes // 1440} дн назад"
 
 
-TEMPLATES.env.filters.update(int=_int, dt=_dt, usd=_usd, why_ru=insiders.why_ru)
+TEMPLATES.env.filters.update(int=_int, dt=_dt, usd=_usd, why_ru=insiders.why_ru, money=crypto.money)
 TEMPLATES.env.globals.update(ASSET_CLASSES=ASSET_CLASSES)
 
 DIRECTION = {
@@ -207,6 +207,25 @@ def create_app(deps: AdminDeps) -> FastAPI:
             insiders=insiders,
             unlocks=unlocks,
         )
+
+    @app.get("/crypto", response_class=HTMLResponse)
+    def crypto_page(request: Request, asset: str = "BTC"):
+        asset = asset.upper() if asset.upper() in crypto.ASSETS else "BTC"
+        now = deps.now()
+        wanted = [(n, d) for n, d in deps.sources if n in crypto.SOURCES]
+        with deps.engine.connect() as conn:
+            ctx = {
+                "lev": crypto.leverage(conn, asset, now),
+                "liq": crypto.liquidations(conn, asset, now),
+                "book": crypto.orderbook(conn, asset, now),
+                "etf": crypto.etf(conn, asset),
+                "tre": crypto.treasuries(conn, asset),
+                "unl": crypto.unlocks(conn, now),
+                "news": data.news(conn, data.NewsFilter(asset_class="crypto", limit=15)),
+                "sources": status.source_statuses(conn, wanted, now),
+                "streams": crypto.liquidation_streams(conn, now),
+            }
+        return render(request, "crypto.html", "crypto", asset=asset, ASSETS=crypto.ASSETS, **ctx)
 
     @app.get("/calendar", response_class=HTMLResponse)
     def calendar_page(request: Request, edit: int | None = None, new: int = 0):

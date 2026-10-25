@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block title %}Крипта{% endblock %}
+{% macro pct(v, digits=1) -%}
+{%- if v is none -%}—{%- else -%}<span class="{{ 'up' if v > 0 else ('down' if v < 0 else 'muted') }}">{{ ('%+.' ~ digits ~ 'f') % (v * 100) }}%</span>{%- endif -%}
+{%- endmacro %}
+{% macro fund(v) -%}
+{%- if v is none -%}—{%- else -%}<span class="{{ 'down' if v > 0.0003 else ('up' if v < 0 else '') }}">{{ '%+.4f' % (v * 100) }}%</span>{%- endif -%}
+{%- endmacro %}
+{% macro chip(link) -%}
+{%- set d = DIRECTION.get(link.direction) -%}
+<span class="chip {{ 'unres' if link.unresolved else (d[2] if d else 'neut') }}">{{ link.label }}{% if d %} {{ d[1] }}{% endif %}<b>{{ link.importance }}</b></span>
+{%- endmacro %}
+{% block content %}
+<style>
+.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .cols-2 { grid-template-columns: minmax(0, 1fr); } }
+.up { color: var(--bull); } .down { color: var(--bear); }
+.link-label { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 6px 0 -6px; }
+.seg { display: inline-flex; border: 1px solid var(--field); border-radius: 8px; overflow: hidden; }
+.seg a { padding: 8px 16px; color: var(--ink); font-weight: 500; }
+.seg a.on { background: var(--accent); color: #fff; }
+.seg a:hover { text-decoration: none; }
+.sparks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 900px) { .sparks { grid-template-columns: minmax(0, 1fr); } }
+.spark svg { width: 100%; height: 48px; display: block; }
+.spark .rng { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.liqbars { display: flex; align-items: flex-end; gap: 3px; height: 110px; }
+.liqbars > div { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; }
+.liqbars .l { background: var(--bear); border-radius: 2px 2px 0 0; }
+.liqbars .s { background: var(--bull); }
+.liqaxis { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.flowbar { display: grid; grid-template-columns: 48px 1fr 1fr 72px; gap: 6px; align-items: center; font-size: 12px; }
+.flowbar .neg { display: flex; justify-content: flex-end; } .flowbar .neg > div { background: var(--bear); height: 10px; border-radius: 3px 0 0 3px; }
+.flowbar .pos > div { background: var(--bull); height: 10px; border-radius: 0 3px 3px 0; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 4px; margin-right: 6px; }
+.dot.ok { background: var(--accent); } .dot.warn { background: var(--bear); } .dot.idle { background: #b9b5aa; }
+</style>
+
+<header class="page">
+  <div>
+    <h1>Крипта · {{ asset }}</h1>
+    <p class="sub">Причины → участники → стакан → цена · время UTC · обновлено {{ now | dt('%H:%M') }}</p>
+  </div>
+  <nav class="seg" aria-label="Монета">{% for a in ASSETS %}<a href="/crypto?asset={{ a }}" class="{{ 'on' if a == asset }}">{{ a }}</a>{% endfor %}</nav>
+</header>
+
+<div class="kpis">
+  <div class="kpi"><span class="l">Цена (перпы)</span><span class="v">{{ '{:,.0f}'.format(lev.price).replace(',', ' ') if lev.price else '—' }}</span><span class="n">{{ pct(lev.price_change) }} за 24 ч</span></div>
+  <div class="kpi"><span class="l">Открытый интерес</span><span class="v">{{ lev.oi | money }}</span><span class="n">{{ pct(lev.oi_change) }} за 24 ч · 3 биржи</span></div>
+  <div class="kpi"><span class="l">Фандинг, 8 ч</span><span class="v" style="font-size: 22px;">{{ fund(lev.funding) }}</span><span class="n">{{ 'лонги платят шортам' if lev.funding and lev.funding > 0 else ('шорты платят лонгам' if lev.funding and lev.funding < 0 else '') }}</span></div>
+  <div class="kpi"><span class="l">Лонги / шорты</span><span class="v">{{ '%.2f' % lev.ls if lev.ls else '—' }}</span><span class="n">по аккаунтам, среднее бирж</span></div>
+  <div class="kpi"><span class="l">Ликвидации 24 ч</span><span class="v" style="font-size: 20px;"><span class="down">{{ liq.sums['24 ч'].long | money }}</span> / <span class="up">{{ liq.sums['24 ч'].short | money }}</span></span><span class="n">лонги / шорты</span></div>
+  <div class="kpi"><span class="l">Стакан ±0,1%</span><span class="v" style="font-size: 20px;">{{ book.spot | money }} / {{ book.perp | money }}</span><span class="n">спот / перпы{% if book.spot and book.spot_median %} · спот {{ pct(book.spot / book.spot_median - 1, 0) }} к медиане суток{% endif %}</span></div>
+  <div class="kpi"><span class="l">ETF, последний день</span><span class="v" style="font-size: 22px;"><span class="{{ 'up' if etf.last and etf.last.usd > 0 else 'down' }}">{{ etf.last.usd | money(true) if etf.last else '—' }}</span></span><span class="n">{{ etf.last.date.strftime('%d.%m') if etf.last else '' }} · 5 дней {{ etf.sum5 | money(true) }}</span></div>
+  <div class="kpi"><span class="l">Разлоки</span><span class="v">{{ unl.week }}</span><span class="n">на 7 дней · {{ unl.total }} на 14</span></div>
+</div>
+
+<p class="link-label">Участники</p>
+
+<section class="card" aria-labelledby="lev-h">
+  <div class="card-head"><h2 id="lev-h">Спекулянты с плечом</h2><span class="small muted">снимок {{ lev.at | dt }} · каждые 5 мин</span></div>
+  <p class="note">Открытый интерес растёт вместе с ценой — в движение заходят новые деньги с плечом. Высокий фандинг и перекос лонгов — толпа уже в лонге: топливо для каскада вниз. Рост OI против цены — набирают шорты.</p>
+  {% if lev.rows %}
+  <div style="overflow-x: auto;">
+  <table>
+    <thead><tr><th>Биржа</th><th class="num">Открытый интерес</th><th class="num">Фандинг 8 ч</th><th class="num">Интервал</th><th class="num">Лонги / шорты</th><th class="num">Цена</th></tr></thead>
+    <tbody>{% for r in lev.rows %}
+      <tr><td style="text-transform: capitalize;">{{ r.exchange }}</td><td class="num">{{ r.oi_usd | money }}</td><td class="num">{{ fund(r.funding_8h) }}</td>
+        <td class="num muted">{{ '%g ч' % r.funding_interval_h if r.funding_interval_h else '—' }}</td><td class="num">{{ '%.2f' % r.long_short_ratio if r.long_short_ratio else '—' }}</td>
+        <td class="num">{{ '{:,.2f}'.format(r.mark_price).replace(',', ' ') if r.mark_price else '—' }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  </div>
+  <div class="sparks">
+    {% for key, title in (('price', 'Цена'), ('oi', 'Открытый интерес'), ('funding', 'Фандинг 8 ч')) %}
+    <div class="spark">
+      <h3>{{ title }} · 7 дней</h3>
+      {% if lev.series[key] %}
+      <svg viewBox="0 0 260 48" preserveAspectRatio="none" role="img" aria-label="{{ title }} за 7 дней"><path d="{{ lev.series[key] }}" fill="none" stroke="var(--accent)" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>
+      {% set lo, hi = lev.ranges[key] %}
+      <div class="rng">{% if key == 'funding' %}<span>{{ '%+.4f' % (lo * 100) }}%</span><span>{{ '%+.4f' % (hi * 100) }}%</span>{% elif key == 'oi' %}<span>{{ lo | money }}</span><span>{{ hi | money }}</span>{% else %}<span>{{ '{:,.0f}'.format(lo).replace(',', ' ') }}</span><span>{{ '{:,.0f}'.format(hi).replace(',', ' ') }}</span>{% endif %}</div>
+      {% else %}<p class="small muted">мало данных</p>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}<p class="empty">Снимков плеча ещё нет.</p>{% endif %}
+</section>
+
+<div class="grid cols-2">
+  <section class="card" aria-labelledby="etf-h">
+    <div class="card-head"><h2 id="etf-h">Спотовые ETF США</h2><span class="small muted">Farside · чистый поток за день</span></div>
+    <p class="note">Приток — институциональные деньги покупают спот без плеча. Устойчивый отток несколько дней подряд — крупный продавец, которого стакан должен поглотить.</p>
+    {% for d in etf.days %}
+    <div class="flowbar"><span class="mono muted">{{ d.date.strftime('%d.%m') }}</span>
+      <div class="neg">{% if d.usd < 0 %}<div style="width: {{ d.pct }}%;"></div>{% endif %}</div>
+      <div class="pos">{% if d.usd > 0 %}<div style="width: {{ d.pct }}%;"></div>{% endif %}</div>
+      <span class="num {{ 'up' if d.usd > 0 else ('down' if d.usd < 0 else 'muted') }}">{{ d.usd | money(true) }}</span></div>
+    {% else %}<p class="empty">Нет данных Farside.</p>{% endfor %}
+  </section>
+
+  <section class="card" aria-labelledby="tre-h">
+    <div class="card-head"><h2 id="tre-h">Публичные компании</h2><span class="small muted">CoinGecko · снимок {{ tre.at.strftime('%d.%m') if tre.at else '—' }}</span></div>
+    <p class="note">Компании-казначейства покупают на привлечённые деньги. Пока покупают — постоянный спрос; остановка покупок или продажи — снятие опоры.</p>
+    {% if tre.rows %}
+    <table>
+      <thead><tr><th>Компания</th><th class="num">{{ asset }}</th><th class="num">Стоимость</th><th class="num">{{ 'с ' ~ tre.since.strftime('%d.%m') if tre.since else 'изм.' }}</th></tr></thead>
+      <tbody>{% for r in tre.rows %}
+        <tr><td><div style="font-weight: 500;" class="ellipsis">{{ r.name }}</div><div class="mono small muted">{{ r.symbol or '' }}</div></td>
+          <td class="num">{{ '{:,.0f}'.format(r.holdings).replace(',', ' ') }}</td><td class="num">{{ r.value_usd | money }}</td>
+          <td class="num {{ 'up' if r.change and r.change > 0 else ('down' if r.change and r.change < 0 else 'muted') }}">{{ '{:+,.0f}'.format(r.change).replace(',', ' ') if r.change else ('0' if r.change == 0 else '—') }}</td></tr>
+      {% endfor %}</tbody>
+    </table>
+    <p class="small muted" style="margin: 0;">Всего у {{ tre.companies }} компаний: {{ '{:,.0f}'.format(tre.total).replace(',', ' ') }} {{ asset }}{% if tre.total_change is not none %}, {{ '{:+,.0f}'.format(tre.total_change).replace(',', ' ') }} с {{ tre.since.strftime('%d.%m') }}{% endif %}</p>
+    {% else %}<p class="empty">Снимков ещё нет.</p>{% endif %}
+  </section>
+</div>
+
+<p class="link-label">Стакан</p>
+
+<div class="grid cols-2">
+  <section class="card" aria-labelledby="book-h">
+    <div class="card-head"><h2 id="book-h">Глубина у цены</h2><span class="small muted">снимок {{ book.at | dt }} · USD в пределах ±0,1% / ±0,5%</span></div>
+    <p class="note">Лимитные заявки держат цену, рыночные её двигают. Тонкий стакан — небольшой поток сдвигает цену далеко. Сравнивайте с ликвидациями за час: если они больше глубины ±0,1%, каскад пробивает уровни.</p>
+    {% if book.rows %}
+    <div style="overflow-x: auto;">
+    <table>
+      <thead><tr><th>Площадка</th><th class="num">Покупки 0,1%</th><th class="num">Продажи 0,1%</th><th class="num">Перевес</th><th class="num">Покупки 0,5%</th><th class="num">Продажи 0,5%</th><th class="num">Спред</th></tr></thead>
+      <tbody>{% for r in book.rows %}
+        <tr><td>{{ r.name }}</td><td class="num">{{ r.bid_01 | money }}</td><td class="num">{{ r.ask_01 | money }}</td>
+          <td class="num">{% if r.imbalance is not none %}<span class="{{ 'up' if r.imbalance > 0.6 else ('down' if r.imbalance < 0.4 else 'muted') }}">{{ '%.0f' % (r.imbalance * 100) }}% пок.</span>{% else %}—{% endif %}</td>
+          <td class="num">{{ r.bid_05 | money }}</td><td class="num">{{ r.ask_05 | money }}</td><td class="num muted">${{ '%g' % r.spread }}</td></tr>
+      {% endfor %}</tbody>
+    </table>
+    </div>
+    <p class="small muted" style="margin: 0;">Медиана за сутки ±0,1%: спот {{ book.spot_median | money }}, перпы Binance+OKX {{ book.perp_median | money }}. «—» — биржа отдаёт стакан не так глубоко.</p>
+    {% else %}<p class="empty">Снимков стакана ещё нет.</p>{% endif %}
+  </section>
+
+  <section class="card" aria-labelledby="liq-h">
+    <div class="card-head"><h2 id="liq-h">Ликвидации</h2><span class="small muted">принудительные рыночные заявки · по часам за 24 ч</span></div>
+    <p class="note">Ликвидация лонга — это принудительная продажа по рынку, шорта — покупка. Всплеск в одну сторону показывает, кого выносит; после крупного выноса перекос плеча обычно снимается.</p>
+    <table>
+      <thead><tr><th></th>{% for k in liq.sums %}<th class="num">{{ k }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        <tr><td class="down">Лонги</td>{% for k, v in liq.sums.items() %}<td class="num">{{ v.long | money }}</td>{% endfor %}</tr>
+        <tr><td class="up">Шорты</td>{% for k, v in liq.sums.items() %}<td class="num">{{ v.short | money }}</td>{% endfor %}</tr>
+      </tbody>
+    </table>
+    {% if liq.max_hour %}
+    <div class="liqbars" role="img" aria-label="Ликвидации по часам">{% for b in liq.bars %}
+      <div title="{{ b.hour }} ч назад · лонги {{ b.long | money }} · шорты {{ b.short | money }}"><div class="s" style="height: {{ b.sp }}%;"></div><div class="l" style="height: {{ b.lp }}%;"></div></div>
+    {% endfor %}</div>
+    <div class="liqaxis"><span>24 ч назад</span><span>макс. за час {{ liq.max_hour | money }}</span><span>сейчас</span></div>
+    <div class="legend small"><span><span class="dot warn"></span>лонги</span> <span><span class="dot" style="background: var(--bull);"></span>шорты</span></div>
+    {% endif %}
+    <p class="small muted" style="margin: 0;">За 24 ч: {% for ex, v in liq.by_ex.items() %}{{ ex }} {{ (v.long + v.short) | money }}{{ ' · ' if not loop.last }}{% endfor %}. Binance присылает не больше одной ликвидации в секунду на монету — в каскаде занижает.</p>
+  </section>
+</div>
+
+<p class="link-label">Причины</p>
+
+<div class="grid cols-2">
+  <section class="card" aria-labelledby="news-h">
+    <div class="card-head"><h2 id="news-h">Новости про крипту</h2><a class="small" href="/news?asset_class=crypto">вся лента →</a></div>
+    {% for r in news %}
+    <a href="/news?id={{ r.id }}" style="display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--line-2); color: inherit;">
+      <span class="small muted mono">{{ r.published_at | dt }} · {{ r.source }}</span>
+      <span>{{ r.summary or r.title }}</span>
+      <span style="display: flex; flex-wrap: wrap; gap: 4px;">{% for link in r.links[:4] %}{{ chip(link) }}{% endfor %}</span>
+    </a>
+    {% else %}<p class="empty">Нет размеченных новостей про крипту.</p>{% endfor %}
+  </section>
+
+  <section class="card" aria-labelledby="unl-h">
+    <div class="card-head"><h2 id="unl-h">Разлоки токенов</h2><span class="small muted">DefiLlama · 14 дней · от 1% предложения</span></div>
+    <p class="note">Команда и ранние инвесторы получают токены, которые часто продают. Давит на конкретную монету, на BTC и ETH — нет.</p>
+    <table>
+      <thead><tr><th>Когда</th><th>Проект</th><th class="num">% предл.</th></tr></thead>
+      <tbody>{% for u in unl.rows %}
+        <tr><td class="mono small">{{ u.unlock_at | dt('%a %d.%m') }}</td>
+          <td><a href="https://defillama.com/unlocks/{{ u.protocol }}" target="_blank" rel="noopener" style="font-weight: 500;">{{ u.name }}</a>
+            <div class="small muted ellipsis" style="max-width: 220px;" title="{{ u.recipients }}">{{ u.recipients }}</div></td>
+          <td class="num down">{{ '%.1f' % u.pct_unlocked }}%</td></tr>
+      {% else %}<tr><td colspan="3" class="empty">Крупных разлоков нет</td></tr>{% endfor %}</tbody>
+    </table>
+    <p class="small muted" style="margin: 0;">ФРС, CPI и другие события — в <a href="/calendar?market=crypto">календаре</a> и на странице <a href="/market">«Рынок»</a>.</p>
+  </section>
+</div>
+
+<section class="card" aria-labelledby="src-h">
+  <div class="card-head"><h2 id="src-h">Источники данных</h2><span class="small muted">последний запуск</span></div>
+  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px 16px; font-size: 13px;">
+    {% for s in sources %}
+    <div><span class="dot {{ 'ok' if s.last_status == 'ok' else ('warn' if s.last_status in ('error', 'aborted') else 'idle') }}"></span>{{ s.description.split(':')[0] }} <span class="muted small">· {{ ago(s.last_started) }}</span></div>
+    {% endfor %}
+    {% for s in streams %}
+    {% set fresh = s.last and (now - s.last).total_seconds() < 3600 %}
+    <div><span class="dot {{ 'ok' if fresh else 'warn' }}"></span>Ликвидации {{ s.exchange }} <span class="muted small">· {{ ago(s.last) if s.last else 'нет данных' }}</span></div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

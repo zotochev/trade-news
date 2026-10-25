@@ -3,25 +3,50 @@
 Этот файл — точка передачи между сессиями. Обновлять в конце каждой сессии:
 что сделано, что в работе, что решили, что нужно от заказчика.
 
-## Текущее состояние (2026-09-27)
+## Текущее состояние (2026-10-25)
 
-- **Сервер:** `debian-4gb-nbg1-2`, `/opt/trade-news`, systemd `trade-news.service` (User=crip).
-  Сессии Claude идут прямо на сервере в этой папке. Деплой: код уже лежит здесь, при новых
-  зависимостях `uv sync --no-dev`, затем `sudo systemctl restart trade-news` — без пароля
-  (правило в `/etc/sudoers.d`, только start/stop/restart этого сервиса), перезапуск делает Claude
-  и проверяет `journalctl -u trade-news`. Миграции применяются сами (`ExecStartPre`).
-  Задеплоен main целиком (включая отрасли).
-- **Всё в одном процессе `trade-news run`:** 12 сборщиков, разметка (раз в 2 мин), рассылка
-  (раз в 1 мин), очистка (раз в сутки), Telegram-бот, админка на `127.0.0.1:10000`.
-- **Бот:** @criptradenewsbot, отдельный от ict-monitor. Владелец `TELEGRAM_CHAT_ID` получает
-  рассылку всегда. Сейчас 3 получателя.
-- **Правила рассылки на сервере** (2026-09-25): включена, `min_importance: 4`, направление
-  обязательно, `max_per_hour: 10`, `max_age_hours: 10`, watchlist пуст.
+- **Сервер:** `debian-4gb-nbg1-2` (4 ГБ RAM без swap, диск 38 ГБ, свободно ~22), `/opt/trade-news`,
+  systemd `trade-news.service` (User=crip). Деплой: код уже лежит здесь, новые зависимости —
+  `uv add` / `uv sync --no-dev`, перезапуск ТОЛЬКО точной командой
+  `sudo -n /usr/bin/systemctl restart trade-news` (sudoers без пароля ровно на неё; без sudo и с
+  `.service` — Access denied; процесс не убивать). Миграции применяются сами (`ExecStartPre`).
+  `/opt` принадлежит root: новую папку там создаёт владелец (`sudo mkdir … && sudo chown crip`).
+- **Всё в одном процессе `trade-news run`:** 22 сборщика (см. `config.yaml → sources`), разметка
+  (раз в 2 мин), рассылка (раз в 1 мин), дайджест/напоминания календаря, потоки ликвидаций
+  (websocket, отдельные потоки), очистка, Telegram-бот, админка и API на `127.0.0.1:10000`.
+- **Бот:** @criptradenewsbot. Владелец `TELEGRAM_CHAT_ID` получает рассылку всегда; активных
+  подписчиков 2. Правила: включена, `min_importance: 4`, направление обязательно,
+  `max_per_hour: 10`, `max_age_hours: 10`. Без порогов (always_sources): ff_calendar,
+  cme_fedwatch, fred, token_unlocks, ru_minfin. «Фон рынка» выключен с 2026-10-07.
 - **Админка наружу:** nginx + HTTPS + auth_basic на `kainode.duckdns.org` (`deploy/HTTPS.md`).
-- **Промпт LLM:** `v2`. Модели только `gemini-3.5-flash-lite` и `gemini-3.1-flash-lite`, квота
-  поделена с другими приложениями, лимиты в `config.yaml`.
-- **Ключи в `.env`:** SEC_USER_AGENT, FINNHUB, GEMINI, TELEGRAM, MARKETAUX, FRED (FMP ключ есть,
-  но календарь у FMP платный и не используется).
+  Разделы: Обзор, Рынок, График, Лента, Инсайдеры, Календарь, LLM, активы, подписчики.
+- **LLM:** промпт `v3`, модели `gemini-3.5-flash-lite` и `gemini-3.1-flash-lite`.
+  `GEMINI_API_KEY` ОБЩИЙ с `/opt/ict-monitor` (один проект Google = общие лимиты): превышения
+  в панели Google — в основном от ict-monitor (2026-10-12). Решение за владельцем: отдельный ключ
+  в отдельном проекте Google Cloud. Не решено.
+- **Инсайдеры (Form 4):** в LLM и бот только сделки CFO (`form4_thresholds.cfo_only`); все
+  остальные видны на странице «Инсайдеры».
+- **Ключи в `.env`:** SEC_USER_AGENT, FINNHUB, GEMINI, TELEGRAM, MARKETAUX, FRED.
+- **Потребитель API:** дашборд `/opt/economy-model-lab` (сессия Claude `economy-model`, пишет через
+  cross-session сообщения; отвечать ей `SendMessage` по имени из `ListAgents`). Он читает
+  `/api/calendar`, `/api/crypto/leverage`, `/api/ru/open-positions`, `/api/etf/flows`,
+  `/api/treasuries` напрямую с `127.0.0.1:10000` (без basic auth). Задание от него —
+  `docs/tasks/forced-flows.md`, части A–D сделаны.
+- **Remote-сессии Claude на сервере:** `claude remote-control` в `/opt/trade-news`,
+  `/opt/economy-model-lab`, `/opt/fat-control` (запуск: `cd <папка> && setsid nohup claude
+  remote-control > claude_rc.log 2>&1 &`). Сессия в `/opt/running-city` умерла (была 2026-10-16),
+  перезапустить, если нужна. После перезагрузки сервера сами не поднимаются.
+
+### Ближайшие проверки и сроки
+- **5.11 (3-й рабочий день):** первый живой анонс Минфина — проверить, что `ru_minfin` создал
+  событие `ru_minfin_ops` и сообщение (лог `ru_minfin_found`). Текущий период 7.10–6.11
+  (покупки 12,7 млрд/день) в календаре отсутствует — добавить вручную, если попросят.
+- **Январь и июль:** обновить `ru_minfin.cbr_mirroring_rub_bn_day` (зеркалирование ЦБ, сейчас
+  −0.58 на 2П 2026).
+- **Весна:** сверить расписание Russell на следующий год (FTSE Russell).
+- Farside (потоки ETF) за Cloudflare: если `etf_flows` упадёт — запасной путь паи × NAV.
+- Без ответа владельца остались: упростить разбор разлоков (json вместо ijson) и поднять
+  `token_unlocks.per_run` 3 → ~10 (полный круг за сутки вместо 2,5).
 
 ## Сделано
 

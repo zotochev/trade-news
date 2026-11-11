@@ -98,7 +98,8 @@ def test_clusters_window_people_and_plans(engine):
     assert [p["owner"] for p in c["owners"]] == ["CEO A", "CFO B"]
     item = insiders.cluster_item(c)
     assert item.title.startswith("Cluster insider buying · AN · 2 insiders bought $1.53M")
-    assert "importance 4, 5 when it includes the CEO or CFO" in item.raw["hint"]
+    assert "set importance 5" in item.raw["hint"]  # CEO + CFO, $1.53M
+    assert insiders.cluster_importance(c | {"usd": 900_000}) == 4
 
 
 def test_fresh_clusters_become_news_once(engine, cfg):

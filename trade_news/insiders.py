@@ -55,8 +55,12 @@ def _float(s) -> float | None:
 def _row(accession, seq, issuer, owners, roles, planned, filed_at, url, origin, t) -> dict:
     shares, price = t["shares"], t.get("price")
     day = _date(t.get("date"))
-    if day and filed_at and not (
-        filed_at.date() - timedelta(days=5 * 365) <= day <= filed_at.date() + timedelta(days=30)
+    if (
+        day
+        and filed_at
+        and not (
+            filed_at.date() - timedelta(days=5 * 365) <= day <= filed_at.date() + timedelta(days=30)
+        )
     ):
         day = None  # a typo in the filing (year 0023, 2028): no date beats a wrong one
     return {
@@ -284,6 +288,14 @@ def _money(v: float) -> str:
     return f"${v / 1e6:.2f}M" if v >= 1e6 else f"${v / 1e3:.0f}K"
 
 
+def cluster_importance(c: dict) -> int:
+    """5 with the CEO or CFO among the buyers and $1M+ in total, else 4 (a fixed rule: the
+    LLM alone gave 5 to $200K clusters)."""
+    roles = " ".join(p["roles"] or "" for p in c["owners"]).upper()
+    top = any(x in roles for x in ("CEO", "CFO", "CHIEF EXECUTIVE", "CHIEF FINANCIAL"))
+    return 5 if top and c["usd"] >= 1_000_000 else 4
+
+
 def cluster_item(c: dict):
     """A news item for a cluster (raw_items source insider_clusters)."""
     from trade_news.collectors.base import RawItem
@@ -298,11 +310,9 @@ def cluster_item(c: dict):
     body = (f"{c['issuer_name']}: {c['insiders']} different insiders bought shares with their "
             f"own money within {WINDOW_DAYS} trading days, {c['trades']} transactions, "
             f"{_money(c['usd'])} in total, none under a Rule 10b5-1 plan. {who}.")  # fmt: skip
-    roles = " ".join(p["roles"] or "" for p in c["owners"])
-    top = "CEO" in roles.upper() or "CFO" in roles.upper() or "CHIEF" in roles.upper()
     hint = (f"cluster insider buying (Form 4, code P) in {c['ticker'] or c['issuer_name']}; "
-            "several insiders buying together is a stronger signal than one buy: importance 4"
-            + (", 5 when it includes the CEO or CFO and exceeds $1M" if top else ""))  # fmt: skip
+            "several insiders buying together is a stronger signal than one buy; "
+            f"set importance {cluster_importance(c)} for the company")  # fmt: skip
     facts = {k: v.isoformat() if isinstance(v, date) else v for k, v in c.items()}
     return RawItem(
         source_item_id=c["key"],

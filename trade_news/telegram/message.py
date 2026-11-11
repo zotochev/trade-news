@@ -59,6 +59,7 @@ SOURCE_RU = {
     "fred": "FRED",
     "ff_calendar": "Календарь + FRED",
     "token_unlocks": "DefiLlama",
+    "insider_clusters": "SEC Form 4",
     "ru_minfin": "ТАСС / РИА / Ведомости",
     **CENTRAL_BANKS,
 }

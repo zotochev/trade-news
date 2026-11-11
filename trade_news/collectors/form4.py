@@ -29,6 +29,8 @@ class Trade:
     shares: float
     price: float | None
     date: str | None
+    shares_after: float | None = None  # owned following the transaction
+    direct: str | None = None  # D (direct) | I (indirect, e.g. via a trust or fund)
 
     @property
     def value(self) -> float | None:
@@ -114,6 +116,10 @@ def parse(submission: str) -> Form4 | None:
                 shares=shares,
                 price=_float(_text(tx, "transactionAmounts/transactionPricePerShare")),
                 date=_text(tx, "transactionDate"),
+                shares_after=_float(
+                    _text(tx, "postTransactionAmounts/sharesOwnedFollowingTransaction")
+                ),
+                direct=_text(tx, "ownershipNature/directOrIndirectOwnership"),
             )
         )
     ticker = _text(issuer, "issuerTradingSymbol")

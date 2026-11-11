@@ -20,6 +20,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import asdict
 from datetime import datetime
 
+from trade_news import insiders
 from trade_news.collectors import form4, schedule13d
 from trade_news.collectors.base import Batch, Context, RawItem, collector
 
@@ -155,7 +156,15 @@ def fetch(ctx: Context, cursor: dict | None) -> Batch:
             cursor[SEEN_KEYS[f]] = (kept + done)[-SEEN_MAX:]
     if first_run and cursor_before:  # a form added to an existing source: its backlog
         items = [_backlog(it) if _form_of(it.raw, first_run) else it for it in items]
-    return Batch(items=items, cursor=cursor)
+    trades = [  # every role, whatever the LLM thresholds let through
+        row
+        for it in items
+        if it.raw.get("form4")
+        for row in insiders.rows_from_form4(
+            it.source_item_id, it.raw["form4"], it.published_at, it.url
+        )
+    ]
+    return Batch(items=items, cursor=cursor, rows={"insider_trades": trades} if trades else {})
 
 
 def _form_of(raw: dict, forms: list[str]) -> str | None:

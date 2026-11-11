@@ -15,6 +15,7 @@ sectors [--all]     fill sectors/industries of assets (SEC SIC codes for equitie
 background          send the "Фон рынка" digest now (--dry-run: print it, send nothing)
 flows digest|remind send the forced flows week digest / eve reminders now (--dry-run: print)
 crypto-backfill     load the last 29 days of Binance open interest / long-short (5 min)
+insiders-backfill   insider trades from stored Form 4 + SEC quarterly archives (--quarters)
 admin               the admin web page alone (127.0.0.1:ADMIN_PORT); `run` starts it too
 """
 
@@ -32,11 +33,12 @@ import sqlalchemy as sa
 import structlog
 from dotenv import load_dotenv
 
-from trade_news import asset_sectors, background, delivery, llm, queries, retention
+from trade_news import asset_sectors, background, delivery, insiders, llm, queries, retention
 from trade_news.admin import app as admin_app
 from trade_news.annotation import assets as asset_ref
 from trade_news.annotation.run import annotate_pending
 from trade_news.collectors import discover
+from trade_news.collectors.base import Batch, CollectorSpec
 from trade_news.config import Config, load_config
 from trade_news.crypto import backfill as crypto_backfill
 from trade_news.crypto import liquidations
@@ -59,6 +61,7 @@ from trade_news.http import RateLimiter, make_getter
 from trade_news.logs import setup_logging
 from trade_news.pipeline import (
     WRITE_LOCK,
+    ingest,
     make_context,
     missing_secrets,
     run_source,
@@ -183,6 +186,16 @@ def cmd_run(cfg: Config) -> None:
         max_instances=1,
         coalesce=True,
     )
+    scheduler.add_job(
+        run_insider_clusters,
+        "interval",
+        args=(engine, cfg),
+        minutes=30,
+        next_run_time=utcnow() + timedelta(minutes=2),
+        id="insider_clusters",
+        max_instances=1,
+        coalesce=True,
+    )
     sec_get = make_getter(client, shared_limiter(cfg, limiters, "sec"), source="sectors")
     scheduler.add_job(
         run_sectors,
@@ -288,6 +301,29 @@ def run_cleanup(engine: sa.Engine, cfg: Config) -> None:
         retention.cleanup(engine, cfg.retention, utcnow(), write_lock=WRITE_LOCK)
     except Exception:
         log.exception("cleanup_job_failed")
+
+
+CLUSTERS_SPEC = CollectorSpec(
+    insiders.SPEC_NAME,
+    lambda ctx, cur: Batch([]),
+    description="Групповые покупки инсайдеров",
+    title_dedup=False,
+)
+
+
+def run_insider_clusters(engine: sa.Engine, cfg: Config) -> None:
+    """Fresh cluster buys (insiders.clusters) become news items, annotated like the rest."""
+    try:
+        ts = utcnow()
+        with engine.connect() as conn:
+            found = insiders.fresh_cluster_items(conn, ts)
+        if found:
+            with WRITE_LOCK, engine.begin() as conn:
+                stats = ingest(conn, CLUSTERS_SPEC, Batch(found), cfg, ts)
+            if stats.inserted:
+                log.info("insider_clusters_new", items=stats.inserted)
+    except Exception:
+        log.exception("insider_clusters_failed")
 
 
 def run_sectors(engine: sa.Engine, get, cfg: Config) -> None:
@@ -514,6 +550,28 @@ def cmd_crypto_backfill(cfg: Config, days: int) -> None:
     print(f"{n} new snapshots for {', '.join(symbols)}")
 
 
+def cmd_insiders_backfill(cfg: Config, quarters: int) -> None:
+    """Rows for the Form 4 already in raw_items, then the newest `quarters` SEC data sets
+    (one zip each, ~10 MB). Safe to repeat: rows already stored are skipped."""
+    engine = make_engine(cfg.database_url)
+    with engine.begin() as conn:
+        print(f"stored Form 4: {insiders.backfill_from_raw(conn)} new rows")
+    if quarters <= 0:
+        return
+    ua = os.environ.get("SEC_USER_AGENT")
+    if not ua:
+        raise SystemExit("SEC_USER_AGENT is not set")
+    headers = {"User-Agent": ua}
+    with httpx.Client(timeout=120, follow_redirects=True) as client:
+        get = make_getter(client, shared_limiter(cfg, {}, "sec"), source="insiders_backfill")
+        links = insiders.dataset_links(get(insiders.DATASETS_PAGE, headers=headers).text)
+        for path in links[:quarters]:
+            data = get(f"https://www.sec.gov{path}", headers=headers).content
+            with engine.begin() as conn:
+                n = insiders.load_dataset(conn, data)
+            print(f"{path.rsplit('/', 1)[-1]}: {n} new rows ({len(data) / 1e6:.1f} MB)")
+
+
 def admin_port() -> int:
     return int(os.environ.get("ADMIN_PORT") or 10000)
 
@@ -696,6 +754,8 @@ def main(argv: list[str] | None = None) -> None:
     bg.add_argument("--dry-run", action="store_true", help="print the digest, send nothing")
     cb = sub.add_parser("crypto-backfill")
     cb.add_argument("--days", type=int, default=30, help="at most 29 (Binance keeps ~30 days)")
+    ib = sub.add_parser("insiders-backfill")
+    ib.add_argument("--quarters", type=int, default=12, help="SEC data sets, newest first")
     fl = sub.add_parser("flows")
     fl.add_argument("what", choices=["digest", "remind"])
     fl.add_argument("--dry-run", action="store_true", help="print the messages, send nothing")
@@ -737,6 +797,8 @@ def main(argv: list[str] | None = None) -> None:
             cmd_background(cfg, args.dry_run)
         case "crypto-backfill":
             cmd_crypto_backfill(cfg, args.days)
+        case "insiders-backfill":
+            cmd_insiders_backfill(cfg, args.quarters)
         case "flows":
             cmd_flows(cfg, args.what, args.dry_run)
         case "sectors":

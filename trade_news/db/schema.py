@@ -425,6 +425,36 @@ crypto_orderbook = sa.Table(
     sa.Index(None, "ts"),
 )
 
+# Open-market insider trades (Form 4 codes P and S), one row per transaction, every role.
+# From the sec_edgar collector as filings arrive and from the SEC Insider Transactions Data
+# Sets for history (`trade-news insiders-backfill`). Kept forever.
+insider_trades = sa.Table(
+    "insider_trades",
+    metadata,
+    sa.Column("accession", sa.String(24), nullable=False),
+    sa.Column("seq", sa.Integer, nullable=False),  # order of the transaction in the filing
+    sa.Column("ticker", sa.String(16)),
+    sa.Column("issuer_cik", sa.String(16)),
+    sa.Column("issuer_name", sa.Text),
+    sa.Column("owner", sa.Text),  # reporting owners joined with "; "
+    sa.Column("roles", sa.Text),  # "CEO, Director", "10% owner", ...
+    sa.Column("transaction_date", sa.Date),
+    sa.Column("filed_at", UTCDateTime),
+    sa.Column("code", sa.String(2), nullable=False),  # P | S
+    sa.Column("shares", sa.Float, nullable=False),
+    sa.Column("price", sa.Float),
+    sa.Column("usd", sa.Float),
+    sa.Column("shares_after", sa.Float),
+    sa.Column("direct", sa.String(2)),  # D | I
+    sa.Column("planned", sa.Boolean),  # Rule 10b5-1 plan (filings since 2023)
+    sa.Column("url", sa.Text),
+    sa.Column("origin", sa.String(16), nullable=False),  # edgar | sec_dataset
+    sa.PrimaryKeyConstraint("accession", "seq"),
+    sa.Index(None, "transaction_date"),
+    sa.Index(None, "ticker", "transaction_date"),
+    sa.Index(None, "issuer_cik", "transaction_date"),
+)
+
 # MOEX futures open positions of individuals vs legal entities, daily (collector
 # moex_open_positions). Contracts; kept forever.
 moex_open_positions = sa.Table(

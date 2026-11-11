@@ -19,6 +19,7 @@ import sqlalchemy as sa
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from trade_news import insiders as insider_ref
 from trade_news import sectors as sector_ref
 from trade_news import views
 from trade_news.annotation.whale import whale_of
@@ -149,6 +150,47 @@ class TreasuryHolding(BaseModel):
     entry_value_usd: float | None = Field(description="Cost basis, as reported")
     value_usd: float | None
     pct_supply: float | None = Field(description="% of the coin's total supply")
+
+
+class InsiderTrade(BaseModel):
+    ticker: str | None
+    issuer_cik: str | None
+    issuer_name: str | None
+    accession: str
+    seq: int = Field(description="Order of the transaction in the filing")
+    url: str | None = Field(description="Filing index on EDGAR")
+    owner: str | None = Field(description="Reporting owners, '; '-joined")
+    roles: str | None = Field(description="CEO, CFO, Director, 10% owner, ... (', '-joined)")
+    transaction_date: date | None
+    filed_at: datetime | None = Field(description="UTC; midnight for archive rows")
+    code: Literal["P", "S"] = Field(description="P = open-market purchase, S = sale")
+    shares: float
+    price: float | None
+    usd: float | None = Field(description="shares x price")
+    shares_after: float | None = Field(description="Owned after the transaction")
+    direct_or_indirect: str | None = Field(description="D | I")
+    planned: bool | None = Field(description="Rule 10b5-1 plan; null before 2023 / not given")
+    origin: str = Field(description="edgar (live) | sec_dataset (SEC quarterly archive)")
+
+
+class ClusterOwner(BaseModel):
+    owner: str | None
+    roles: str | None
+    usd: float
+    trades: int
+
+
+class InsiderCluster(BaseModel):
+    ticker: str | None
+    issuer_cik: str | None
+    issuer_name: str | None
+    start: date = Field(description="First buy of the window")
+    end: date = Field(description="Last buy inside the 10 trading days")
+    insiders: int = Field(description="Different owners who bought")
+    usd: float
+    trades: int
+    last_filed_at: datetime | None
+    owners: list[ClusterOwner]
 
 
 class CalendarEvent(BaseModel):
@@ -639,6 +681,57 @@ def create_api(engine: sa.Engine) -> FastAPI:
                 q = q.where(sa.or_(t.symbol.ilike(f"{c}.%"), t.symbol == c, t.name.ilike(f"%{c}%")))
             rows = conn.execute(q.order_by(t.snapshot_date, t.holdings.desc())).mappings().all()
         return [TreasuryHolding(date=r["snapshot_date"], **r) for r in rows]
+
+    def _span(from_: date | None, to: date | None, days: int = 30) -> tuple[date, date]:
+        end = to or datetime.now(UTC).date()
+        start = from_ or end - timedelta(days=days)
+        if end < start or end - start > timedelta(days=3700):
+            raise HTTPException(422, "`to` must be after `from`, at most ~10 years apart")
+        return start, end
+
+    @api.get(
+        "/insiders",
+        response_model=list[InsiderTrade],
+        summary="Open-market insider trades (Form 4 P / S) of every role, one row per transaction",
+    )
+    def insider_trades(
+        from_: Annotated[
+            date | None, Query(alias="from", description="Transaction date; default to - 30 days")
+        ] = None,
+        to: Annotated[date | None, Query(description="Default: today")] = None,
+        ticker: str = "",
+        code: Annotated[str, Query(description="P, S or P,S")] = "P,S",
+        min_usd: Annotated[float, Query(ge=0)] = 0,
+        role: Annotated[str, Query(description="Substring of roles: CEO, CFO, Director, ...")] = "",
+        limit: Annotated[int, Query(ge=1, le=20000)] = 5000,
+    ) -> list[InsiderTrade]:
+        start, end = _span(from_, to)
+        codes = [x for x in (c.strip().upper() for c in code.split(",")) if x in ("P", "S")]
+        if not codes:
+            raise HTTPException(422, "`code`: P, S or P,S")
+        with engine.connect() as conn:
+            rows = insider_ref.trades(conn, start, end, ticker.strip(), codes, min_usd,
+                                      role.strip(), limit)  # fmt: skip
+        return [InsiderTrade(**r, direct_or_indirect=r["direct"]) for r in rows]
+
+    @api.get(
+        "/insiders/clusters",
+        response_model=list[InsiderCluster],
+        summary="Cluster buying: 2+ insiders of one company bought within 10 trading days",
+    )
+    def insider_clusters(
+        from_: Annotated[
+            date | None, Query(alias="from", description="Window start; default to - 90 days")
+        ] = None,
+        to: Annotated[date | None, Query(description="Default: today")] = None,
+        ticker: str = "",
+        min_usd: Annotated[float, Query(ge=0)] = 100_000,
+        min_insiders: Annotated[int, Query(ge=2)] = 2,
+    ) -> list[InsiderCluster]:
+        start, end = _span(from_, to, days=90)
+        with engine.connect() as conn:
+            found = insider_ref.clusters(conn, start, end, min_usd, min_insiders, ticker.strip())
+        return [InsiderCluster(**c) for c in found]
 
     @api.get("/sectors", response_model=list[SectorRef], summary="Sector / industry keys")
     def list_sectors() -> list[SectorRef]:

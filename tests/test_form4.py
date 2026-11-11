@@ -142,6 +142,9 @@ def test_collector_enriches_new_form4_only():
     assert "0000000001-26-000003" not in by_id  # fetched before: never re-sent without details
     assert by_id["0000000001-26-000004"].raw["llm_skip"] == "no open-market trades"
     assert set(batch.cursor["form4_seen"]) == {f"0000000001-26-00000{i}" for i in range(1, 5)}
+    # every open-market trade goes to insider_trades, whatever the LLM thresholds (RSU: none)
+    (row,) = batch.rows["insider_trades"]
+    assert row["accession"] == "0000000001-26-000001" and row["code"] == "P"
     # the feed repeats the same filings on the next run: nothing to overwrite the parsed rows
     again = fetch(ctx, batch.cursor)
     assert not [it for it in again.items if it.raw.get("form") == "4"]

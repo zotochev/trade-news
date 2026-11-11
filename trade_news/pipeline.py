@@ -24,6 +24,7 @@ from trade_news.db.schema import (
     crypto_treasuries,
     econ_events,
     etf_flows,
+    insider_trades,
     items,
     macro_observations,
     moex_open_positions,
@@ -50,6 +51,7 @@ ROW_TABLES = {
     "crypto_orderbook": (crypto_orderbook, ("symbol", "venue", "ts")),
     "moex_open_positions": (moex_open_positions, ("asset", "trade_date", "is_fiz")),
     "crypto_treasuries": (crypto_treasuries, ("coin", "snapshot_date", "name")),
+    "insider_trades": (insider_trades, ("accession", "seq")),
 }
 # {name: (table, key column, rows to leave alone)}: dates move (earnings), sizes get announced
 UPSERT_TABLES = {
